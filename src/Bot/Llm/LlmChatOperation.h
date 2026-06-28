@@ -23,7 +23,9 @@ public:
     {
         ZoneChannel,  // bot's current-zone General channel (SayToChannel GENERAL)
         World,        // custom World channel (SayToWorld)
-        Whisper       // whisper back to whisperTarget
+        Whisper,      // whisper back to whisperTarget
+        Say,          // local /say (bot->Say) - BG taunts / public
+        Raid          // raid/BG chat (SayToRaid) - BG coordination
     };
 
     LlmChatOperation(ObjectGuid botGuid, Target target, std::string text, std::string whisperTarget = "")

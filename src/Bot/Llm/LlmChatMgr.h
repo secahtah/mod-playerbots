@@ -55,6 +55,11 @@ public:
     // Proactive ambient line for a bot in its current zone. Returns true if it emitted (canned) or dispatched.
     bool MaybeAmbient(Player* bot);
 
+    // In-battleground objective callout. Looks up a canned line for (bgZoneId, situation), substitutes <loc>,
+    // then 50/50 posts it verbatim or LLM-reflavors it (canned line = seed). Emits to /say or /bg per the row.
+    // Returns true if it emitted or dispatched. Safe to call from the world thread or a map (engine) thread.
+    bool BgCallout(Player* bot, uint32 bgZoneId, std::string situation, std::string locName = "");
+
 private:
     LlmChatMgr() = default;
     ~LlmChatMgr();
@@ -109,6 +114,8 @@ private:
     std::map<std::pair<ObjectGuid, ObjectGuid>, Convo> _convos;  // (botGuid, playerGuid)
     std::unordered_map<ObjectGuid, time_t> _botCooldown;
     std::unordered_map<uint32, time_t> _zoneCooldown;
+    std::unordered_map<ObjectGuid, time_t> _bgBotCooldown;               // BG per-bot
+    std::map<std::pair<uint32, std::string>, time_t> _bgEventCooldown;   // (bg instanceId, situation)
     std::unordered_map<uint32, uint32> _zoneBotTurns;  // bot-to-bot depth per zone (decays)
     std::unordered_set<uint32> _zonesWithPlayers;      // cached real-player zones (refreshed in Update)
     std::unordered_map<ObjectGuid, std::deque<time_t>> _whisperWindow;  // per-player whisper timestamps

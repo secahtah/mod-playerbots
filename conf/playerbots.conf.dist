@@ -891,6 +891,18 @@ AiPlayerbot.LlmWhisperPerPlayerPerMin = 3
 # Output denylist: comma-separated, case-insensitive substrings. Any LLM reply containing one is dropped
 # (the bot stays silent). Best-effort moderation on top of the model's own safety.
 AiPlayerbot.LlmBlocklist = ""
+# --- In-battleground objective callouts (separate frequency from world chat; shared token budget) ---
+# Enable bots to announce objective callouts in BGs ("Ramming the gate!", "Blue is down!"). Works even
+# with LlmEnabled=0 (canned lines only). Lines come from the playerbot_llm_bg_callout table.
+AiPlayerbot.LlmBgEnabled = 1
+# % of BG callouts posted verbatim from the canned pool vs LLM-reflavored (the canned line is the LLM seed).
+AiPlayerbot.LlmBgCannedChance = 50
+# Per-bot say cooldown inside a battleground (shorter than the world LlmBotCooldownSec).
+AiPlayerbot.LlmBgBotCooldownSec = 30
+# Per (battleground instance, situation) cooldown - stops many bots shouting the same callout at once.
+AiPlayerbot.LlmBgEventCooldownSec = 15
+# Per-tick percent chance for a bot to emit an ambient/action callout (taunts, incoming, ramming).
+AiPlayerbot.LlmBgAnnounceChance = 25
 # Verbose logging of LLM prompts, usage, and gate decisions (to the playerbots log).
 AiPlayerbot.LlmDebug = 0
 

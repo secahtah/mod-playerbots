@@ -30,6 +30,10 @@ bool LlmChatOperation::Execute()
             return botAI->Whisper(_text, _whisperTarget);
         case Target::World:
             return botAI->SayToWorld(_text);
+        case Target::Say:
+            return botAI->Say(_text);
+        case Target::Raid:
+            return botAI->SayToRaid(_text);
         case Target::ZoneChannel:
         default:
             return botAI->SayToChannel(_text, ChatChannelId::GENERAL);

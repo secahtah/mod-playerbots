@@ -131,6 +131,7 @@ private:
     bool teamFlagTaken();
     bool protectFC();
     bool useBuff();
+    bool announce();  // objective-aware in-BG callout (ramming / flag / taunt) via LlmChatMgr
     uint32 getPlayersInArea(TeamId teamId, Position point, float range, bool combat = true);
     bool IsLockedInsideKeep();
 };

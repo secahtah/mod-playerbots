@@ -60,6 +60,7 @@ void LlmPersonaMgr::Load()
     _attitude.clear();
     _zoneFlavor.clear();
     _zoneCanned.clear();
+    _bgCallouts.clear();
 
     if (QueryResult r =
             PlayerbotsDatabase.Query("SELECT kind, id, trait_text FROM playerbot_llm_persona WHERE locale = 'enUS'"))
@@ -114,8 +115,61 @@ void LlmPersonaMgr::Load()
         } while (r->NextRow());
     }
 
-    LOG_INFO("playerbots", "LLM persona data loaded: {} race, {} class, {} attitude, {} zone-flavor, {} canned-zones",
-             _raceTraits.size(), _classTraits.size(), _attitude.size(), _zoneFlavor.size(), _zoneCanned.size());
+    if (QueryResult r = PlayerbotsDatabase.Query(
+            "SELECT bg_zone_id, situation, line, channel, weight FROM playerbot_llm_bg_callout WHERE locale = 'enUS'"))
+    {
+        do
+        {
+            Field* f = r->Fetch();
+            uint32 bgZone = f[0].Get<uint32>();
+            std::string situation = f[1].Get<std::string>();
+            BgCalloutLine c;
+            c.line = f[2].Get<std::string>();
+            c.channel = f[3].Get<std::string>();
+            c.weight = f[4].Get<uint32>();
+            if (c.weight == 0)
+                c.weight = 1;
+            _bgCallouts[{bgZone, situation}].push_back(std::move(c));
+        } while (r->NextRow());
+    }
+
+    LOG_INFO("playerbots",
+             "LLM persona data loaded: {} race, {} class, {} attitude, {} zone-flavor, {} canned-zones, {} bg-callouts",
+             _raceTraits.size(), _classTraits.size(), _attitude.size(), _zoneFlavor.size(), _zoneCanned.size(),
+             _bgCallouts.size());
+}
+
+std::string LlmPersonaMgr::BgCallout(uint32 bgZoneId, std::string const& situation, std::string& channelOut) const
+{
+    std::lock_guard<std::mutex> guard(_mutex);
+    auto pick = [&](uint32 zone) -> std::string
+    {
+        auto it = _bgCallouts.find({zone, situation});
+        if (it == _bgCallouts.end() || it->second.empty())
+            return "";
+        uint32 total = 0;
+        for (BgCalloutLine const& c : it->second)
+            total += c.weight;
+        if (total == 0)
+            return "";
+        uint32 roll = urand(0, total - 1);
+        for (BgCalloutLine const& c : it->second)
+        {
+            if (roll < c.weight)
+            {
+                channelOut = c.channel;
+                return c.line;
+            }
+            roll -= c.weight;
+        }
+        channelOut = it->second.front().channel;
+        return it->second.front().line;
+    };
+
+    std::string line = pick(bgZoneId);
+    if (line.empty())
+        line = pick(0);  // any-BG fallback rows
+    return line;
 }
 
 std::string LlmPersonaMgr::BuildSystemPrompt(Player* bot) const

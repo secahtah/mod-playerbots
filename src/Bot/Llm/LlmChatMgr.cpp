@@ -5,6 +5,7 @@
 
 #include "LlmChatMgr.h"
 
+#include "Battleground.h"
 #include "LlmPersonaMgr.h"
 #include "Log.h"
 #include "ObjectAccessor.h"
@@ -438,10 +439,14 @@ bool LlmChatMgr::RequestReply(Player* bot, uint32 chatType, std::string const& m
     if (!isWhisper)
     {
         ChatChannelSource src = botAI->GetChatChannelSource(bot, chatType, channelName);
+        bool inBg = bot->InBattleground();
         if (src == SRC_WORLD)
             target = LlmChatOperation::Target::World;
         else if (src == SRC_GENERAL)
             target = LlmChatOperation::Target::ZoneChannel;
+        else if (inBg && (src == SRC_SAY || src == SRC_RAID || src == SRC_PARTY))
+            target = LlmChatOperation::Target::Raid;  // BG replies go to TEAM chat only - LLM output is never
+                                                      // posted to enemy-visible /say (only admin canned taunts are)
         else
             return false;  // whisper handled above; other sources fall back to canned
     }
@@ -486,6 +491,10 @@ bool LlmChatMgr::RequestReply(Player* bot, uint32 chatType, std::string const& m
         else
         {
             std::lock_guard<std::mutex> guard(_mutex);
+            // In a BG a real player is heard by many bots; throttle replies per speaker (reuse the whisper
+            // limiter) so one player's /say spam can't cycle through bots and drain the shared budget.
+            if (bot->InBattleground() && !WhisperThrottleOk(speakerGuid, now))
+                return false;
             if (!BotOffCooldownStamp(bot->GetGUID(), now))
                 return false;
         }
@@ -569,7 +578,7 @@ bool LlmChatMgr::MaybeAmbient(Player* bot)
     if (flavored && urand(0, 99) < sPlayerbotAIConfig.llmZoneCannedChance)
     {
         std::string line = Sanitize(sLlmPersonaMgr.RandomCannedLine(zoneId));
-        if (!line.empty())
+        if (!line.empty() && !Blocked(line))
         {
             botAI->SayToChannel(line, ChatChannelId::GENERAL);
             return true;
@@ -605,6 +614,107 @@ bool LlmChatMgr::MaybeAmbient(Player* bot)
     job.req.timeoutMs = sPlayerbotAIConfig.llmTimeoutMs;
     job.botGuid = bot->GetGUID();
     job.target = LlmChatOperation::Target::ZoneChannel;
+    job.convoPlayer = ObjectGuid::Empty;
+    job.isOllama = isOllama;
+    job.estTokens = est;
+    Submit(std::move(job));
+    return true;
+}
+
+bool LlmChatMgr::BgCallout(Player* bot, uint32 bgZoneId, std::string situation, std::string locName)
+{
+    if (!sPlayerbotAIConfig.llmBgEnabled || !bot)
+        return false;
+
+    std::string channel;
+    std::string line = sLlmPersonaMgr.BgCallout(bgZoneId, situation, channel);
+    if (line.empty())
+        return false;
+
+    // dynamic location substitution (e.g. "<loc> is down!" -> "Blue Gate is down!")
+    if (!locName.empty())
+    {
+        size_t p = 0;
+        while ((p = line.find("<loc>")) != std::string::npos)
+            line.replace(p, 5, locName);
+    }
+
+    PlayerbotAI* botAI = GET_PLAYERBOT_AI(bot);
+    if (!botAI)
+        return false;
+
+    Battleground* bg = bot->GetBattleground();
+    uint32 instanceId = bg ? bg->GetInstanceID() : 0;
+    time_t now = time(nullptr);
+
+    {
+        std::lock_guard<std::mutex> guard(_mutex);
+        // Peek BOTH cooldowns before stamping either, so losing the per-(instance,situation) race
+        // doesn't burn the bot's 30s cooldown without it ever speaking.
+        auto bIt = _bgBotCooldown.find(bot->GetGUID());
+        if (bIt != _bgBotCooldown.end() && now < bIt->second + (time_t)sPlayerbotAIConfig.llmBgBotCooldownSec)
+            return false;
+        auto key = std::make_pair(instanceId, situation);
+        auto eIt = _bgEventCooldown.find(key);
+        if (eIt != _bgEventCooldown.end() && now < eIt->second + (time_t)sPlayerbotAIConfig.llmBgEventCooldownSec)
+            return false;
+        _bgBotCooldown[bot->GetGUID()] = now;
+        _bgEventCooldown[key] = now;
+    }
+
+    bool const toRaid = (channel == "bg");
+    bool const isOllama = sPlayerbotAIConfig.llmProvider == "ollama";
+
+    auto emitCanned = [&]()
+    {
+        std::string text = Sanitize(line);
+        if (text.empty() || Blocked(text))  // enforce the denylist on canned lines too (uniform moderation)
+            return;
+        if (toRaid)
+            botAI->SayToRaid(text);
+        else
+            botAI->Say(text);
+    };
+
+    // 50/50 (LlmBgCannedChance): post the canned line verbatim, or LLM-reflavor it (canned line = seed).
+    bool useLlm = Enabled() && urand(0, 99) >= sPlayerbotAIConfig.llmBgCannedChance;
+    if (isOllama && OllamaSuppressed())
+        useLlm = false;
+    if (!useLlm)
+    {
+        emitCanned();
+        return true;
+    }
+
+    std::vector<LlmMessage> messages;
+    std::string sys = sLlmPersonaMgr.BuildSystemPrompt(bot);
+    std::string flavor = sLlmPersonaMgr.ZoneFlavor(bgZoneId);
+    if (!flavor.empty())
+        sys += " " + flavor;
+    messages.push_back({"system", sys});
+    messages.push_back(
+        {"user", "Rephrase this battleground shout in character as one short line, no quotes: \"" + line + "\""});
+
+    uint32 est = EstimateTokens(messages, sPlayerbotAIConfig.llmMaxTokens);
+    {
+        std::lock_guard<std::mutex> guard(_mutex);
+        if (!ReserveSlot(est, isOllama))
+        {
+            emitCanned();  // budget/rate gated -> still say the canned line
+            return true;
+        }
+    }
+
+    Job job;
+    job.req.model = sPlayerbotAIConfig.llmModel;
+    job.req.maxTokens = sPlayerbotAIConfig.llmMaxTokens;
+    job.req.messages = std::move(messages);
+    job.req.provider = sPlayerbotAIConfig.llmProvider;
+    job.req.apiBase = sPlayerbotAIConfig.llmApiBase;
+    job.req.apiKey = sPlayerbotAIConfig.llmApiKey;
+    job.req.timeoutMs = sPlayerbotAIConfig.llmTimeoutMs;
+    job.botGuid = bot->GetGUID();
+    job.target = toRaid ? LlmChatOperation::Target::Raid : LlmChatOperation::Target::Say;
     job.convoPlayer = ObjectGuid::Empty;
     job.isOllama = isOllama;
     job.estTokens = est;
