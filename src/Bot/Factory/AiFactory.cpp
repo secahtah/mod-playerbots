@@ -479,6 +479,9 @@ void AiFactory::AddDefaultCombatStrategies(Player* player, PlayerbotAI* const fa
         if (bgType == BATTLEGROUND_IC)
             engine->addStrategy("isle", false);
 
+        if (bgType == BATTLEGROUND_SA)
+            engine->addStrategy("strand", false);
+
         if (player->InArena())
         {
             engine->addStrategy("arena", false);
@@ -684,7 +687,7 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
         if (bgType == BATTLEGROUND_RB)
             bgType = player->GetBattleground()->GetBgTypeID(true);
 
-        if ((bgType <= BATTLEGROUND_EY || bgType == BATTLEGROUND_IC) &&
+        if ((bgType <= BATTLEGROUND_EY || bgType == BATTLEGROUND_IC || bgType == BATTLEGROUND_SA) &&
             !player->InArena())  // do not add for not supported bg or arena
             nonCombatEngine->addStrategy("battleground", false);
 
@@ -702,6 +705,9 @@ void AiFactory::AddDefaultNonCombatStrategies(Player* player, PlayerbotAI* const
 
         if (bgType == BATTLEGROUND_IC)
             nonCombatEngine->addStrategy("isle", false);
+
+        if (bgType == BATTLEGROUND_SA)
+            nonCombatEngine->addStrategy("strand", false);
 
         if (player->InArena())
         {
