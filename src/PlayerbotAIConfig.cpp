@@ -102,6 +102,11 @@ bool PlayerbotAIConfig::Initialize()
     llmZoneCannedChance = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmZoneCannedChance", 60);
     llmWhisperPerPlayerPerMin = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmWhisperPerPlayerPerMin", 3);
     llmBlocklist = sConfigMgr->GetOption<std::string>("AiPlayerbot.LlmBlocklist", "");
+    llmBgEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmBgEnabled", true);
+    llmBgCannedChance = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBgCannedChance", 50);
+    llmBgBotCooldownSec = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBgBotCooldownSec", 30);
+    llmBgEventCooldownSec = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBgEventCooldownSec", 15);
+    llmBgAnnounceChance = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBgAnnounceChance", 25);
     llmDebug = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmDebug", false);
 
     globalCoolDown = sConfigMgr->GetOption<int32>("AiPlayerbot.GlobalCooldown", 500);

@@ -26,6 +26,7 @@
 #include "Event.h"
 #include "GameObject.h"
 #include "IVMapMgr.h"
+#include "LlmChatMgr.h"
 #include "PathGenerator.h"
 #include "Playerbots.h"
 #include "PositionValue.h"
@@ -1755,7 +1756,36 @@ bool BGTactics::Execute(Event /*event*/)
     if (getName() == "check objective")
         return resetObjective();
 
+    if (getName() == "announce")
+        return announce();
+
     return false;
+}
+
+bool BGTactics::announce()
+{
+    if (!sPlayerbotAIConfig.llmBgEnabled)
+        return false;
+    if (urand(1, 100) > sPlayerbotAIConfig.llmBgAnnounceChance)
+        return false;
+
+    Battleground* bg = bot->GetBattleground();
+    if (!bg || bg->GetStatus() != STATUS_IN_PROGRESS)
+        return false;
+
+    // Pick a situation from the bot's own current state; fall back to ambient barks/taunts.
+    std::string situation;
+    if (botAI->IsInVehicle())
+        situation = "ramming";
+    else if (PlayerHasFlag::IsCapturingFlag(bot))
+        situation = "flag_carry";
+    else
+    {
+        static char const* const amb[] = {"taunt", "incoming", "defend"};
+        situation = amb[urand(0, 2)];
+    }
+
+    return sLlmChatMgr.BgCallout(bot, bot->GetZoneId(), situation, "");
 }
 
 bool BGTactics::moveToStart(bool force)

@@ -25,6 +25,7 @@
 #include "GuildTaskMgr.h"
 #include "PlayerScript.h"
 #include "PlayerbotAIConfig.h"
+#include "LlmBgEvents.h"
 #include "LlmChatMgr.h"
 #include "PlayerbotGuildMgr.h"
 #include "PlayerbotSpellRepository.h"
@@ -519,9 +520,19 @@ public:
         }
 
         bgStrategies[bg->GetInstanceID()] = data;
+        LlmBgEvents::OnEnd(bg->GetInstanceID());  // clear any stale snapshot for a reused instance id
     }
 
-    void OnBattlegroundEnd(Battleground* bg, TeamId /*winnerTeam*/) override { bgStrategies.erase(bg->GetInstanceID()); }
+    void OnBattlegroundEnd(Battleground* bg, TeamId /*winnerTeam*/) override
+    {
+        bgStrategies.erase(bg->GetInstanceID());
+        LlmBgEvents::OnEnd(bg->GetInstanceID());
+    }
+
+    void OnBattlegroundUpdate(Battleground* bg, uint32 diff) override
+    {
+        LlmBgEvents::Update(bg, diff);  // detect objective changes -> fire bot callouts
+    }
 };
 
 // Workaround for missing InitEnabledHooksIfNeeded for new BattlefieldScript in ScriptMgr

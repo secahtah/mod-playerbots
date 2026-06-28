@@ -34,12 +34,15 @@ void WarsongStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("low mana", { NextAction("bg use buff", ACTION_MOVE)}));
     triggers.push_back(new TriggerNode("player has flag", { NextAction("bg move to objective", ACTION_EMERGENCY)}));
     triggers.push_back(new TriggerNode("timer bg", { NextAction("bg reset objective force", ACTION_EMERGENCY)}));
+    // Low-relevance objective callout (never preempts real BG actions).
+    triggers.push_back(new TriggerNode("timer bg", { NextAction("bg announce", 0.5f)}));
 }
 
 void AlteracStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     triggers.push_back(new TriggerNode("alliance no snowfall gy", { NextAction("bg move to objective", ACTION_EMERGENCY)}));
     triggers.push_back(new TriggerNode("timer bg", { NextAction("bg reset objective force", ACTION_EMERGENCY)}));
+    triggers.push_back(new TriggerNode("timer bg", { NextAction("bg announce", 0.5f)}));
 }
 
 void ArathiStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
@@ -48,6 +51,7 @@ void ArathiStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("often", { NextAction("bg use buff", ACTION_BG)}));
     triggers.push_back(new TriggerNode("low health", { NextAction("bg use buff", ACTION_MOVE)}));
     triggers.push_back(new TriggerNode("low mana", { NextAction("bg use buff", ACTION_MOVE)}));
+    triggers.push_back(new TriggerNode("timer bg", { NextAction("bg announce", 0.5f)}));
 }
 
 void EyeStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
@@ -95,6 +99,8 @@ void StrandStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("in vehicle", { NextAction("fire cannon", ACTION_MOVE + 9.0f)}));
     triggers.push_back(new TriggerNode("enemy is close", { NextAction("ram", ACTION_MOVE + 9.1f)}));
     triggers.push_back(new TriggerNode("in vehicle", { NextAction("ram", ACTION_MOVE + 8.5f)}));
+    // Low-relevance objective callout ("Ramming the gate!", taunts) - never preempts real BG actions.
+    triggers.push_back(new TriggerNode("timer bg", { NextAction("bg announce", 0.5f)}));
     // On-foot: grab a seaforium charge off a beach pile and plant it on an adjacent gate
     // (opportunistic - only fires when a pile/gate is already in reach, never diverts the bot).
     triggers.push_back(new TriggerNode("bg active", { NextAction("plant seaforium", ACTION_NORMAL)}));

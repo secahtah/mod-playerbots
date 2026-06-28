@@ -8,9 +8,14 @@ and faction attitudes. It is **off by default** and works with **OpenAI** (cloud
 
 ## Quick start
 
-All settings live in `playerbots.conf` (prefix `AiPlayerbot.Llm*`). The DB migration
-`data/sql/playerbots/updates/2026_06_28_00_ai_playerbot_llm_chat.sql` is applied automatically and
-seeds race/class personas, faction attitudes, and a **Barrens (zone 17)** era-meme pool.
+All settings live in `playerbots.conf` (prefix `AiPlayerbot.Llm*`). Three DB migrations are applied
+automatically:
+
+- `…/2026_06_28_00_ai_playerbot_llm_chat.sql` — race/class personas, faction attitudes, and a **Barrens
+  (zone 17)** era-meme pool.
+- `…/2026_06_28_01_ai_playerbot_llm_bg_callout.sql` — objective-aware **battleground callouts** (SotA, WSG, AB, AV).
+- `…/2026_06_28_02_ai_playerbot_llm_zone_corpus.sql` — ambient **overworld chatter** for 26 zones (capitals,
+  DK start, Outland, Northrend, classic-nostalgia zones, Wintergrasp) from the curated WotLK chat corpus.
 
 ### Option A — OpenAI (cloud, cheap)
 
@@ -59,8 +64,10 @@ the model resident). At concurrency 1 the 8B model returns short lines in well u
 - **Whispers** — a bot answers in-character (with short conversation memory), throttled per player.
 - **Reactive** — bots may reply in **General**/**World** chat to messages there.
 - **Ambient** — bots occasionally post a line in their zone's General channel, **only when a real player is in
-  that zone** and not too often (zone/bot cooldowns).
+  that zone** and not too often (zone/bot cooldowns). 26 zones ship with curated chatter; see below.
 - **Bot-to-bot** — bots banter with each other, but only with a player present, depth-capped and decaying.
+- **Battleground callouts** — inside SotA/WSG/AB/AV, bots react to live objectives ("Ramming the gate!",
+  "Capped Lumber Mill!", "EFC at mid!") and can chat in BGs. See [In-battleground callouts](#in-battleground-callouts).
 
 ### Personalities
 
@@ -80,7 +87,52 @@ Two optional tables give a zone its own vibe, with most lines posted **free** (n
 - `playerbot_llm_zone_canned` — `(zone_id, locale, line, weight)`: verbatim lines (Mankrik's wife, Chuck
   Norris, Tauren puns, Thunderfury, WC LFG…). `LlmZoneCannedChance` controls the free-vs-LLM mix.
 
-Add a zone by inserting rows with its `zone_id` — no code change.
+`…_02_ai_playerbot_llm_zone_corpus.sql` ships ~180 such lines across 26 zones (Dalaran, Stormwind, Orgrimmar,
+Ironforge, Shattrath, Undercity, the DK start, Hellfire/Zangarmarsh/Nagrand/Terokkar, every Northrend leveling
+zone, classic-nostalgia alt zones, and Wintergrasp). Add a zone by inserting rows with its `zone_id` — no code
+change. The pool is **social-only**: no commerce/gold spam, no slurs or targeted harassment, nothing sexual —
+keep additions to that standard, since bot lines are indistinguishable from real players.
+
+## In-battleground callouts
+
+Bots in **Strand of the Ancients, Warsong Gulch, Arathi Basin, and Alterac Valley** announce what's happening
+on the objectives. Two paths feed it:
+
+- **Proactive** — a low-priority `bg announce` action (relevance `0.5`, never preempts real BG play) fires on a
+  timer and picks a situation from the bot's state (driving a demolisher → `ramming`; carrying a flag →
+  `flag_carry`; otherwise a taunt/incoming/defend).
+- **Event-driven** — `LlmBgEvents` diffs each BG's objective state every server tick and emits the matching
+  callout the moment something changes: SotA `gate_down`/`relic_exposed`, WSG `enemy_has_flag`/`flag_capped`/
+  `flag_returned`, AB `node_captured`/`node_lost`, AV `tower_captured`/`gy_captured`/`reinforcements_low`.
+
+Each callout is a row in `playerbot_llm_bg_callout` `(bg_zone_id, situation, locale, line, channel, weight)`:
+
+- `bg_zone_id` — `4384` SotA, `3277` WSG, `3358` AB, `2597` AV. **`0` = any BG** (a fallback used when no
+  BG-specific row matches).
+- `situation` — the event/state key (e.g. `gate_down`, `enemy_has_flag`, `node_captured`, `taunt`).
+- `channel` — `bg` posts to **team raid chat** (coordination); `say` posts to local **/say** (taunts, public).
+- `line` — the text. `<loc>` is substituted at runtime with the specific gate/node/graveyard name.
+
+Like ambient chatter, each callout is posted **verbatim** part of the time and used as the **LLM seed** the
+rest (so the model reflavors the same topical line in the bot's persona). The BG's own voice comes from a
+`playerbot_llm_zone_flavor` row keyed by the BG zone id.
+
+**To add or retune a callout**, insert/edit a `playerbot_llm_bg_callout` row and `.reload config` (or restart) —
+no recompile. To add an *entirely new* situation, also emit it from `LlmBgEvents::Update` (event-driven) or from
+`BattleGroundTactics::announce` (proactive).
+
+### BG callout tuning
+
+```ini
+AiPlayerbot.LlmBgEnabled        = 1    # master switch for BG callouts
+AiPlayerbot.LlmBgCannedChance   = 50   # % posted verbatim vs LLM-reflavored (rest)
+AiPlayerbot.LlmBgBotCooldownSec = 30   # min seconds between callouts from the same bot
+AiPlayerbot.LlmBgEventCooldownSec = 15 # min seconds between callouts for the same (BG, situation)
+AiPlayerbot.LlmBgAnnounceChance = 25   # % chance the proactive timer actually speaks
+```
+
+These BG rate limits are **separate from** the global ambient/whisper limits, so BG chatter can be tuned
+independently. LLM-reflavored BG replies always go to **team-only** chat (never public `/say`).
 
 ## Guardrails & cost control
 

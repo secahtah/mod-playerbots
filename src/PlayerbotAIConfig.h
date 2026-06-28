@@ -119,6 +119,12 @@ public:
     uint32 llmZoneCannedChance;       // % of flavored-zone ambient drawn free from canned pool
     uint32 llmWhisperPerPlayerPerMin; // anti-abuse: max whisper-triggered LLM calls per player per minute
     std::string llmBlocklist;         // comma-separated case-insensitive output denylist
+    // In-battleground objective-aware callouts (separate frequency from world chat; shared token budget)
+    bool llmBgEnabled;
+    uint32 llmBgCannedChance;         // % of BG callouts posted verbatim vs LLM-reflavored (canned is the seed)
+    uint32 llmBgBotCooldownSec;       // per-bot say cooldown inside a BG
+    uint32 llmBgEventCooldownSec;     // per (bg instance, situation) cooldown - stops many bots shouting the same
+    uint32 llmBgAnnounceChance;       // per-tick chance for the per-bot ambient/action callouts
     bool llmDebug;
     bool allowAccountBots, allowGuildBots, allowTrustedAccountBots;
     bool randomBotGuildNearby, randomBotInvitePlayer, inviteChat;

@@ -49,6 +49,10 @@ public:
 
     bool HasZoneFlavor(uint32 zoneId) const;
 
+    // A weighted-random battleground callout line for (bgZoneId, situation); sets channelOut to "say"/"bg".
+    // Falls back to bg_zone_id 0 (any-BG). Returns "" if nothing is seeded. The line may contain "<loc>".
+    std::string BgCallout(uint32 bgZoneId, std::string const& situation, std::string& channelOut) const;
+
 private:
     LlmPersonaMgr() = default;
 
@@ -58,6 +62,14 @@ private:
     std::map<std::pair<uint8, uint8>, std::string> _attitude;  // (subjectRace, objectRace) -> tag
     std::unordered_map<uint32, std::string> _zoneFlavor;  // zoneId -> flavor text
     std::unordered_map<uint32, std::vector<std::pair<std::string, uint32>>> _zoneCanned;  // zoneId -> [(line, weight)]
+
+    struct BgCalloutLine
+    {
+        std::string line;
+        std::string channel;  // "say" | "bg"
+        uint32 weight = 1;
+    };
+    std::map<std::pair<uint32, std::string>, std::vector<BgCalloutLine>> _bgCallouts;  // (bgZoneId, situation)
 };
 
 #define sLlmPersonaMgr LlmPersonaMgr::instance()
