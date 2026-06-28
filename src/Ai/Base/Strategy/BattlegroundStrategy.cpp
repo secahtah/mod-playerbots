@@ -95,6 +95,9 @@ void StrandStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("in vehicle", { NextAction("fire cannon", ACTION_MOVE + 9.0f)}));
     triggers.push_back(new TriggerNode("enemy is close", { NextAction("ram", ACTION_MOVE + 9.1f)}));
     triggers.push_back(new TriggerNode("in vehicle", { NextAction("ram", ACTION_MOVE + 8.5f)}));
+    // On-foot: grab a seaforium charge off a beach pile and plant it on an adjacent gate
+    // (opportunistic - only fires when a pile/gate is already in reach, never diverts the bot).
+    triggers.push_back(new TriggerNode("bg active", { NextAction("plant seaforium", ACTION_NORMAL)}));
 }
 
 void ArenaStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)

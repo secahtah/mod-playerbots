@@ -8,6 +8,7 @@
 
 #include "BattlegroundAV.h"
 #include "MovementActions.h"
+#include "UseItemAction.h"
 
 class ChatHandler;
 class Battleground;
@@ -143,6 +144,18 @@ public:
 
 private:
     bool moveToCenter(Battleground* bg);
+};
+
+// Strand of the Ancients: opportunistically grab a Massive Seaforium Charge from a beach
+// pile, then plant it on the nearest intact gate. Supplements the demolisher assault - it
+// only acts when a pile/gate is already within reach, so it never diverts the bot.
+class SeaforiumAction : public UseItemAction
+{
+public:
+    SeaforiumAction(PlayerbotAI* botAI) : UseItemAction(botAI, "plant seaforium") {}
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
 };
 
 #endif

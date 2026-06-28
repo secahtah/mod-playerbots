@@ -106,6 +106,14 @@ Position const IC_CANNON_POS_ALLIANCE2 = {425.525f, -779.538f, 87.717f, 5.88f};
 Position const IC_GATE_ATTACK_POS_HORDE = {506.782f, -828.594f, 24.313f, 0.0f};
 Position const IC_GATE_ATTACK_POS_ALLIANCE = {1091.273f, -763.619f, 42.352f, 0.0f};
 
+// Strand of the Ancients attacker beach-landing point (also where the core respawns
+// later-wave attackers once the boats have started moving).
+Position const SA_BEACH_LANDING = {1600.381f, -106.263f, 8.8745f, 3.78f};
+// Massive Seaforium Charge: pile gameobject grants the item on use; using the item plants
+// a charge that blasts a gate. Secondary siege method alongside the demolishers.
+#define ITEM_SA_SEAFORIUM_CHARGE 39213
+#define GO_SA_SEAFORIUM_PILE 190753
+
 enum BattleBotWsgWaitSpot
 {
     BB_WSG_WAIT_SPOT_SPAWN,
@@ -3269,6 +3277,26 @@ bool BGTactics::selectObjective(bool reset)
 
             if (attacker)
             {
+                // Beach landing: get attackers off the boats and onto the strand first. A
+                // docked-boat rider near the beach (or a bot stranded off-boat up north) heads to
+                // shore; a rider on a boat still at sea is left alone so it isn't pushed overboard.
+                // After the opening wave the core respawns attackers on the beach, so this mainly
+                // covers the initial landing.
+                if (!controlsVehicle)
+                {
+                    bool onBoat = bot->GetTransport() != nullptr;
+                    float distBeach = bot->GetExactDist2d(SA_BEACH_LANDING.GetPositionX(),
+                                                          SA_BEACH_LANDING.GetPositionY());
+                    if ((onBoat && distBeach < 130.0f) || (!onBoat && distBeach > 170.0f))
+                    {
+                        pos.Set(SA_BEACH_LANDING.GetPositionX() + frand(-6.0f, 6.0f),
+                                SA_BEACH_LANDING.GetPositionY() + frand(-6.0f, 6.0f),
+                                SA_BEACH_LANDING.GetPositionZ(), bot->GetMapId());
+                        posMap["bg objective"] = pos;
+                        return true;
+                    }
+                }
+
                 // Driving a demolisher: roll up to the front gate and aim the boulder at it.
                 if (controlsVehicle && targetGate)
                 {
@@ -4652,4 +4680,73 @@ bool ArenaTactics::moveToCenter(Battleground* bg)
     }
 
     return true;
+}
+
+bool SeaforiumAction::isUseful()
+{
+    Battleground* bg = bot->GetBattleground();
+    if (!bg)
+        return false;
+    BattlegroundTypeId bgType = bg->GetBgTypeID();
+    if (bgType == BATTLEGROUND_RB)
+        bgType = bg->GetBgTypeID(true);
+    return bgType == BATTLEGROUND_SA && !botAI->IsInVehicle();
+}
+
+bool SeaforiumAction::Execute(Event /*event*/)
+{
+    Battleground* bg = bot->GetBattleground();
+    if (!bg || bg->GetStatus() != STATUS_IN_PROGRESS)
+        return false;
+
+    // Attackers only: the Titan Relic carries the attacker faction (set in ResetObjs).
+    GameObject* relic = bg->GetBGObject(BG_SA_TITAN_RELIC);
+    if (!relic || relic->GetUInt32Value(GAMEOBJECT_FACTION) != BG_SA_Factions[bot->GetTeamId()])
+        return false;
+
+    // Not carrying a charge yet -> grab one from a pile that is already within reach.
+    if (bot->GetItemCount(ITEM_SA_SEAFORIUM_CHARGE) == 0)
+    {
+        GuidVector gos = *context->GetValue<GuidVector>("closest game objects");
+        for (ObjectGuid const& guid : gos)
+        {
+            GameObject* go = botAI->GetGameObject(guid);
+            if (!go || go->GetEntry() != GO_SA_SEAFORIUM_PILE)
+                continue;
+            if (!go->isSpawned() || go->GetGoState() != GO_STATE_READY)
+                continue;
+            if (bot->GetDistance(go) > INTERACTION_DISTANCE)
+                continue;
+
+            WorldPacket data(CMSG_GAMEOBJ_USE);
+            data << go->GetGUID();
+            bot->GetSession()->HandleGameObjectUseOpcode(data);
+            return true;
+        }
+        return false;
+    }
+
+    // Carrying a charge -> plant it on the nearest intact gate the bot is already next to.
+    static uint32 const saGates[6] = {BG_SA_GREEN_GATE, BG_SA_BLUE_GATE,   BG_SA_RED_GATE,
+                                      BG_SA_PURPLE_GATE, BG_SA_YELLOW_GATE, BG_SA_ANCIENT_GATE};
+    for (uint32 const idx : saGates)
+    {
+        GameObject* gate = bg->GetBGObject(idx);
+        if (!gate || gate->GetDestructibleState() == GO_DESTRUCTIBLE_DESTROYED)
+            continue;
+        if (bot->GetDistance(gate) > 6.0f)
+            continue;
+
+        Item* charge = bot->GetItemByEntry(ITEM_SA_SEAFORIUM_CHARGE);
+        if (!charge)
+            return false;
+
+        if (bot->IsMounted())
+            bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+        if (bot->isMoving())
+            bot->StopMoving();
+
+        return UseItemAuto(charge);
+    }
+    return false;
 }
