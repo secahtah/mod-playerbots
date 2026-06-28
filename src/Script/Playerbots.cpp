@@ -25,6 +25,7 @@
 #include "GuildTaskMgr.h"
 #include "PlayerScript.h"
 #include "PlayerbotAIConfig.h"
+#include "LlmChatMgr.h"
 #include "PlayerbotGuildMgr.h"
 #include "PlayerbotSpellRepository.h"
 #include "PlayerbotWorldThreadProcessor.h"
@@ -379,7 +380,13 @@ public:
     void OnUpdate(uint32 diff) override
     {
         PlayerbotWorldThreadProcessor::instance().Update(diff);
+        sLlmChatMgr.Update(diff);            // LLM chat: audience cache + TTL/budget sweep (world thread)
         sRandomPlayerbotMgr.UpdateAI(diff);  // World thread only
+    }
+
+    void OnShutdown() override
+    {
+        sLlmChatMgr.Stop();  // join LLM worker threads while the world + processor are still alive
     }
 };
 
@@ -470,6 +477,7 @@ public:
         }
 
         sRandomPlayerbotMgr.OnPlayerLogout(player);
+        sLlmChatMgr.OnPlayerLogout(player->GetGUID());  // clear LLM conversation memory for this player/bot
     }
 
     void OnPlayerbotLogoutBots() override

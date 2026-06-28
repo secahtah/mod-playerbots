@@ -827,6 +827,73 @@ AiPlayerbot.RandomGearScoreLimit = 0
 # Default: 0 (disabled)
 AiPlayerbot.PreferClassArmorType = 0
 
+###################################################################################################
+# LLM-DRIVEN BOT CHAT
+#   Bots generate in-character global/zone chatter and whisper replies via an LLM (OpenAI cloud or
+#   a local Ollama model). Off by default. See docs/superpowers/specs for the full design.
+###################################################################################################
+
+# Master on/off switch for LLM bot chat.
+AiPlayerbot.LlmEnabled = 0
+# Provider: "openai" (cloud), "ollama" (local), or "mock" (offline echo, for testing).
+AiPlayerbot.LlmProvider = "openai"
+# API base URL. OpenAI: https://api.openai.com/v1 . Ollama (OpenAI-compatible): http://localhost:11434/v1
+AiPlayerbot.LlmApiBase = "https://api.openai.com/v1"
+# API key (secret). Required for OpenAI; ignored by Ollama. Leave blank to keep LLM chat disabled.
+AiPlayerbot.LlmApiKey = ""
+# Model name. OpenAI e.g. gpt-4o-mini . Ollama (RTX 3090 recommended): llama3.1:8b-instruct-q4_K_M
+AiPlayerbot.LlmModel = "gpt-4o-mini"
+# Base system-prompt template (global style). Persona traits/attitudes are appended from DB tables.
+AiPlayerbot.LlmSystemPrompt = "You are a character in World of Warcraft. Stay terse, in-character, and never break the fourth wall or mention being an AI."
+# Max completion tokens per reply (keep small to bound cost + latency).
+AiPlayerbot.LlmMaxTokens = 60
+# HTTP request timeout in milliseconds.
+AiPlayerbot.LlmTimeoutMs = 8000
+# OpenAI only: max tokens spent per day (resets at server midnight). 0 = unlimited. Ollama ignores this.
+AiPlayerbot.LlmDailyTokenBudget = 200000
+# OpenAI only: max API requests per minute.
+AiPlayerbot.LlmRequestsPerMin = 20
+# Ollama only: max concurrent in-flight requests (a single GPU serializes; excess is dropped, not queued).
+AiPlayerbot.LlmOllamaMaxConcurrent = 1
+# Ollama only: if rolling average latency exceeds this (ms), suppress ambient/bot-to-bot (whispers only).
+AiPlayerbot.LlmOllamaTargetLatencyMs = 3000
+# Minimum seconds between any two LLM lines from the same bot.
+AiPlayerbot.LlmBotCooldownSec = 120
+# Minimum seconds between LLM ambient lines in the same zone.
+AiPlayerbot.LlmZoneCooldownSec = 90
+# Only run ambient/bot-to-bot chatter when at least one real (non-bot) player is online. Whispers always answered.
+AiPlayerbot.LlmEnabledOnlyWithPlayers = 1
+# Answer player whispers with the LLM.
+AiPlayerbot.LlmReplyToWhispers = 1
+# Percent chance per eligible tick that a bot emits a proactive ambient line.
+AiPlayerbot.LlmAmbientChance = 5
+# Bot-to-bot conversation: max turns before a thread dies.
+AiPlayerbot.LlmBotToBotMaxTurns = 3
+# Bot-to-bot conversation: percent chance a bot replies to another bot's line (decays with depth).
+AiPlayerbot.LlmBotToBotChance = 15
+# Conversation memory: remember recent whisper exchanges per (bot, player).
+AiPlayerbot.LlmHistoryEnabled = 1
+# Max exchanges (user+bot pairs) remembered. Lower this (or 0) to cut OpenAI token cost.
+AiPlayerbot.LlmHistoryMaxExchanges = 4
+# Max characters kept per remembered message.
+AiPlayerbot.LlmHistoryMaxCharsPerMsg = 160
+# Seconds of inactivity before a conversation is forgotten.
+AiPlayerbot.LlmHistoryTtlSec = 600
+# Hard cap on tracked conversations (LRU eviction backstop).
+AiPlayerbot.LlmHistoryMaxConversations = 500
+# Per-zone era flavor + free canned-meme pool (e.g. Barrens ~2005).
+AiPlayerbot.LlmZoneFlavorEnabled = 1
+# In a flavored zone, percent of ambient lines drawn FREE from the canned pool (vs LLM-generated).
+AiPlayerbot.LlmZoneCannedChance = 60
+# Anti-abuse: max whisper-triggered LLM replies per player per minute (0 = unlimited). Protects the
+# shared token budget / local GPU from a single player spamming whispers.
+AiPlayerbot.LlmWhisperPerPlayerPerMin = 3
+# Output denylist: comma-separated, case-insensitive substrings. Any LLM reply containing one is dropped
+# (the bot stays silent). Best-effort moderation on top of the model's own safety.
+AiPlayerbot.LlmBlocklist = ""
+# Verbose logging of LLM prompts, usage, and gate decisions (to the playerbots log).
+AiPlayerbot.LlmDebug = 0
+
 # When enabled, bots prefer spec-appropriate weapons based on speed and weapon type during autogear.
 # Examples: Arms Warriors favor slow 2H axes/polearms (Axe Specialization), Combat Rogues
 # favor a slow MH with a fast OH, and Enhancement Shamans favor synchronized slow 1H weapons.

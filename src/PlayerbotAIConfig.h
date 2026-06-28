@@ -89,6 +89,37 @@ public:
     bool enabled;
     bool disabledWithoutRealPlayer;
     bool EnableICCBuffs;
+
+    // LLM-driven bot chat (see docs/superpowers/specs/2026-06-28-llm-bot-chat-design.md)
+    bool llmEnabled;
+    std::string llmProvider;          // "openai" | "ollama" | "mock"
+    std::string llmApiBase;           // e.g. https://api.openai.com/v1 or http://localhost:11434/v1
+    std::string llmApiKey;            // secret; OpenAI only
+    std::string llmModel;
+    std::string llmSystemPrompt;      // base style template
+    uint32 llmMaxTokens;
+    uint32 llmTimeoutMs;
+    uint32 llmDailyTokenBudget;       // OpenAI; resets server-midnight (0 = unlimited)
+    uint32 llmRequestsPerMin;         // OpenAI-only rate cap
+    uint32 llmOllamaMaxConcurrent;    // Ollama-only in-flight cap
+    uint32 llmOllamaTargetLatencyMs;  // Ollama adaptive backoff threshold
+    uint32 llmBotCooldownSec;
+    uint32 llmZoneCooldownSec;
+    bool llmEnabledOnlyWithPlayers;
+    bool llmReplyToWhispers;
+    uint32 llmAmbientChance;          // % per eligible tick
+    uint32 llmBotToBotMaxTurns;
+    uint32 llmBotToBotChance;         // % decaying
+    bool llmHistoryEnabled;
+    uint32 llmHistoryMaxExchanges;
+    uint32 llmHistoryMaxCharsPerMsg;
+    uint32 llmHistoryTtlSec;
+    uint32 llmHistoryMaxConversations;
+    bool llmZoneFlavorEnabled;
+    uint32 llmZoneCannedChance;       // % of flavored-zone ambient drawn free from canned pool
+    uint32 llmWhisperPerPlayerPerMin; // anti-abuse: max whisper-triggered LLM calls per player per minute
+    std::string llmBlocklist;         // comma-separated case-insensitive output denylist
+    bool llmDebug;
     bool allowAccountBots, allowGuildBots, allowTrustedAccountBots;
     bool randomBotGuildNearby, randomBotInvitePlayer, inviteChat;
     uint32 globalCoolDown, reactDelay, maxWaitForMove, disableMoveSplinePath, maxMovementSearchTime, expireActionTime,

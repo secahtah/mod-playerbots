@@ -32,6 +32,7 @@
 #include "PerfMonitor.h"
 #include "Player.h"
 #include "PlayerbotAI.h"
+#include "LlmChatMgr.h"
 #include "PlayerbotAIConfig.h"
 #include "PlayerbotFactory.h"
 #include "PlayerbotTextMgr.h"
@@ -1454,6 +1455,11 @@ bool RandomPlayerbotMgr::ProcessBot(Player* bot)
 
     if (bot->InBattlegroundQueue())
         return false;
+
+    // LLM ambient chatter: roll the chance cheaply here; the manager applies audience/cooldown/budget gates.
+    if (sPlayerbotAIConfig.llmEnabled && sPlayerbotAIConfig.llmAmbientChance > 0 &&
+        urand(1, 100) <= sPlayerbotAIConfig.llmAmbientChance)
+        sLlmChatMgr.MaybeAmbient(bot);
 
      uint32 botId = bot->GetGUID().GetCounter();
 

@@ -10,6 +10,7 @@
 #include <string>
 
 #include "Event.h"
+#include "LlmChatMgr.h"
 #include "PlayerbotTextMgr.h"
 #include "Playerbots.h"
 
@@ -214,6 +215,16 @@ void ChatReplyAction::ChatReplyDo(Player* bot, uint32& type, uint32& guid1, std:
     {
         HandleThunderfuryReply(bot, chatChannelSource);
         return;
+    }
+
+    // LLM reply: when enabled and the guardrails pass, dispatch an async LLM-generated reply and skip
+    // the canned tables. Falls through to canned text when disabled / over budget / rate-limited.
+    {
+        ObjectGuid speakerGuid = ObjectGuid(HighGuid::Player, guid1);
+        Player* speaker = ObjectAccessor::FindPlayer(speakerGuid);
+        bool speakerIsBot = speaker && GET_PLAYERBOT_AI(speaker);
+        if (sLlmChatMgr.RequestReply(bot, type, msg, speakerGuid, name, chanName, speakerIsBot))
+            return;
     }
 
     auto messageRepy = GenerateReplyMessage(bot, msg, guid1, name);

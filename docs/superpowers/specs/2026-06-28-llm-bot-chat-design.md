@@ -176,6 +176,8 @@ Add fields + `sConfigMgr->GetOption<T>(...)` reads in `PlayerbotAIConfig::Initia
 | `AiPlayerbot.LlmHistoryMaxCharsPerMsg` | `160` | |
 | `AiPlayerbot.LlmHistoryTtlSec` | `600` | |
 | `AiPlayerbot.LlmHistoryMaxConversations` | `500` | LRU backstop |
+| `AiPlayerbot.LlmWhisperPerPlayerPerMin` | `3` | anti-abuse: max whisper-triggered calls per player/min (0 = unlimited) |
+| `AiPlayerbot.LlmBlocklist` | `""` | comma-separated case-insensitive output denylist |
 | `AiPlayerbot.LlmDebug` | `0` | log prompts/usage/decisions |
 
 ## 9. Threading & Safety
@@ -187,7 +189,14 @@ Add fields + `sConfigMgr->GetOption<T>(...)` reads in `PlayerbotAIConfig::Initia
 
 ## 10. Error Handling & Fallback
 
-Missing key / `LlmEnabled=0` / over-budget / no-audience / rate-or-concurrency-limited / HTTP error / timeout / empty or unsafe response → **silently fall back** to the existing canned reply tables (replies) or skip (ambient). API 429 → back off + skip. All worker exceptions caught. `LlmDebug` records the decision/prompt/usage without spamming chat.
+Missing key / `LlmEnabled=0` / over-budget / no-audience / rate-or-concurrency-limited / unsupported source channel → the synchronous gate returns false and the bot **falls back to the existing canned reply tables** (replies) or skips (ambient). API 429 / HTTP error / timeout / empty / blocklisted response is detected **asynchronously on the worker** after the canned path was already suppressed, so the bot simply **stays silent** for that line (documented behavior — no fallback after dispatch). All worker exceptions are caught. `LlmDebug` records decisions/usage but **never** the API key/Authorization header.
+
+**Security hardening** (from review):
+- **Secret safety:** API key read only from config, never logged; transmitted only over TLS (`verify_peer` + default CA paths + hostname verification + SNI, fails closed); the bearer header is **never attached on a plaintext `http://` base**.
+- **Output neutralisation:** `Sanitize()` strips newlines **and the WoW `|` escape** (blocks forged colour codes / item-/player-hyperlinks), drops enclosing quotes, clamps to 255 chars. A configurable **denylist** (`LlmBlocklist`) drops any offending reply.
+- **Cost/DoS:** whispers (which bypass the ambient/zone gates) are throttled **per player** (`LlmWhisperPerPlayerPerMin`); the daily token budget is **pre-charged** at reservation so the cap is a hard ceiling, not soft.
+- **Concurrency:** worker pool starts happens-once under the queue lock (reply path runs on map threads); provider settings are **snapshotted into the request** so workers never read live config; audience flag + rolling latency are atomics; the audience/zone caches refresh on the world thread. Workers are joined deterministically in `WorldScript::OnShutdown`.
+- **Injection:** all persona/zone SQL is static literals with no user input; `LlmApiBase` is admin-only (no user-influenced host → no SSRF).
 
 ## 11. Testing / Verification
 
