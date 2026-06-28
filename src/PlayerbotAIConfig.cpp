@@ -6,6 +6,7 @@
 #include "PlayerbotAIConfig.h"
 #include <iostream>
 #include "BisListMgr.h"
+#include "LlmPersonaMgr.h"
 #include "Config.h"
 #include "NewRpgInfo.h"
 #include "PlayerbotDungeonRepository.h"
@@ -68,6 +69,40 @@ bool PlayerbotAIConfig::Initialize()
         LOG_INFO("server.loading", "Playerbots Module is disabled in playerbots.conf");
         return false;
     }
+
+    // LLM-driven bot chat
+    llmEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmEnabled", false);
+    llmProvider = sConfigMgr->GetOption<std::string>("AiPlayerbot.LlmProvider", "openai");
+    llmApiBase = sConfigMgr->GetOption<std::string>("AiPlayerbot.LlmApiBase", "https://api.openai.com/v1");
+    llmApiKey = sConfigMgr->GetOption<std::string>("AiPlayerbot.LlmApiKey", "");
+    llmModel = sConfigMgr->GetOption<std::string>("AiPlayerbot.LlmModel", "gpt-4o-mini");
+    llmSystemPrompt = sConfigMgr->GetOption<std::string>(
+        "AiPlayerbot.LlmSystemPrompt",
+        "You are a character in World of Warcraft. Stay terse, in-character, and never break the fourth wall or "
+        "mention being an AI.");
+    llmMaxTokens = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmMaxTokens", 60);
+    llmTimeoutMs = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmTimeoutMs", 8000);
+    llmDailyTokenBudget = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmDailyTokenBudget", 200000);
+    llmRequestsPerMin = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmRequestsPerMin", 20);
+    llmOllamaMaxConcurrent = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmOllamaMaxConcurrent", 1);
+    llmOllamaTargetLatencyMs = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmOllamaTargetLatencyMs", 3000);
+    llmBotCooldownSec = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBotCooldownSec", 120);
+    llmZoneCooldownSec = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmZoneCooldownSec", 90);
+    llmEnabledOnlyWithPlayers = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmEnabledOnlyWithPlayers", true);
+    llmReplyToWhispers = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmReplyToWhispers", true);
+    llmAmbientChance = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmAmbientChance", 5);
+    llmBotToBotMaxTurns = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBotToBotMaxTurns", 3);
+    llmBotToBotChance = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmBotToBotChance", 15);
+    llmHistoryEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmHistoryEnabled", true);
+    llmHistoryMaxExchanges = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmHistoryMaxExchanges", 4);
+    llmHistoryMaxCharsPerMsg = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmHistoryMaxCharsPerMsg", 160);
+    llmHistoryTtlSec = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmHistoryTtlSec", 600);
+    llmHistoryMaxConversations = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmHistoryMaxConversations", 500);
+    llmZoneFlavorEnabled = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmZoneFlavorEnabled", true);
+    llmZoneCannedChance = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmZoneCannedChance", 60);
+    llmWhisperPerPlayerPerMin = sConfigMgr->GetOption<uint32>("AiPlayerbot.LlmWhisperPerPlayerPerMin", 3);
+    llmBlocklist = sConfigMgr->GetOption<std::string>("AiPlayerbot.LlmBlocklist", "");
+    llmDebug = sConfigMgr->GetOption<bool>("AiPlayerbot.LlmDebug", false);
 
     globalCoolDown = sConfigMgr->GetOption<int32>("AiPlayerbot.GlobalCooldown", 500);
     maxWaitForMove = sConfigMgr->GetOption<int32>("AiPlayerbot.MaxWaitForMove", 5000);
@@ -717,6 +752,7 @@ bool PlayerbotAIConfig::Initialize()
     sBisListMgr->LoadAll();
     PlayerbotTextMgr::instance().LoadBotTexts();
     PlayerbotTextMgr::instance().LoadBotTextChance();
+    LlmPersonaMgr::instance().Load();
     PlayerbotFactory::Init();
 
     AiObjectContext::BuildAllSharedContexts();
