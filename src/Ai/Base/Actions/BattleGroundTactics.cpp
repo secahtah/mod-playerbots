@@ -106,6 +106,14 @@ Position const IC_CANNON_POS_ALLIANCE2 = {425.525f, -779.538f, 87.717f, 5.88f};
 Position const IC_GATE_ATTACK_POS_HORDE = {506.782f, -828.594f, 24.313f, 0.0f};
 Position const IC_GATE_ATTACK_POS_ALLIANCE = {1091.273f, -763.619f, 42.352f, 0.0f};
 
+// Strand of the Ancients attacker beach-landing point (also where the core respawns
+// later-wave attackers once the boats have started moving).
+Position const SA_BEACH_LANDING = {1600.381f, -106.263f, 8.8745f, 3.78f};
+// Massive Seaforium Charge: pile gameobject grants the item on use; using the item plants
+// a charge that blasts a gate. Secondary siege method alongside the demolishers.
+#define ITEM_SA_SEAFORIUM_CHARGE 39213
+#define GO_SA_SEAFORIUM_PILE 190753
+
 enum BattleBotWsgWaitSpot
 {
     BB_WSG_WAIT_SPOT_SPAWN,
@@ -172,6 +180,14 @@ std::vector<uint32> const vFlagsIC = {GO_HORDE_BANNER,
                                       GO_ALLIANCE_BANNER_GRAVEYARD_H_CONT,
                                       GO_HORDE_BANNER_GRAVEYARD_H,
                                       GO_HORDE_BANNER_GRAVEYARD_H_CONT};
+
+// Strand of the Ancients: capturable graveyard banners (left/right/central, both faction
+// variants - core uses entry-1 for the alliance-attacker version) plus the Titan Relic GO
+// (192834), which is "used" rather than capture-channeled to instantly win the round.
+std::vector<uint32> const vFlagsSA = {191305, 191306,           // right (east) GY banner: alliance, horde
+                                      191307, 191308,           // left (west) GY banner: alliance, horde
+                                      191309, 191310,           // central (south) GY banner: alliance, horde
+                                      192834};                  // Titan Relic (BG_SA_ObjEntries[BG_SA_TITAN_RELIC])
 
 // BG Waypoints (vmangos)
 
@@ -1197,6 +1213,22 @@ std::vector<BattleBotPath*> const vPaths_IC = {
     &vPath_IC_Hanger_to_Workshop,
 };
 
+// Strand of the Ancients is fully objective-driven (like Isle of Conquest): bots pursue
+// gates/graveyards/relic via selectObjective, never random waypoint-wander. This single
+// beach->relic lane exists only to satisfy the framework's non-empty vPaths requirement;
+// selectObjectiveWp short-circuits for SA so it is not actually walked.
+BattleBotPath vPath_SA_Beach_to_Relic = {
+    {1438.0f, -50.0f, 30.0f, nullptr},   // beach approach
+    {1280.0f, -60.0f, 50.0f, nullptr},   // toward second wall
+    {1055.0f, -108.0f, 82.0f, nullptr},  // yellow gate
+    {878.0f, -108.0f, 117.0f, nullptr},  // ancient gate
+    {837.0f, -107.0f, 127.0f, nullptr},  // titan relic
+};
+
+std::vector<BattleBotPath*> const vPaths_SA = {
+    &vPath_SA_Beach_to_Relic,
+};
+
 std::vector<BattleBotPath*> const vPaths_NoReverseAllowed = {
     &vPath_WSG_AllianceGraveyardJump,
     &vPath_WSG_HordeGraveyardJump,
@@ -1339,6 +1371,9 @@ std::string const BGTactics::HandleConsoleCommandPrivate(WorldSession* session, 
                 break;
             case BATTLEGROUND_IC:
                 vPaths = &vPaths_IC;
+                break;
+            case BATTLEGROUND_SA:
+                vPaths = &vPaths_SA;
                 break;
             default:
                 vPaths = nullptr;
@@ -1617,6 +1652,12 @@ bool BGTactics::Execute(Event /*event*/)
             vFlagIds = &vFlagsIC;
             break;
         }
+        case BATTLEGROUND_SA:
+        {
+            vPaths = &vPaths_SA;
+            vFlagIds = &vFlagsSA;
+            break;
+        }
         default:
             // can't use this in this BG - no vPaths/vFlagIds (will crash server)
             botAI->ResetStrategies();
@@ -1833,6 +1874,23 @@ bool BGTactics::moveToStart(bool force)
                 MoveTo(bg->GetMapId(), IC_WAITING_POS_ALLIANCE.GetPositionX() + frand(-5.0f, 5.0f),
                        IC_WAITING_POS_ALLIANCE.GetPositionY() + frand(-5.0f, 5.0f),
                        IC_WAITING_POS_ALLIANCE.GetPositionZ());
+        }
+    }
+    else if (bgType == BATTLEGROUND_SA)
+    {
+        // Defenders use the warmup to move up to the beach walls and man the guns; attackers
+        // wait on the two boats (the core moves the transports - never path them into the sea).
+        GameObject* relic = bg->GetBGObject(BG_SA_TITAN_RELIC);
+        bool attacker = relic && relic->GetUInt32Value(GAMEOBJECT_FACTION) == BG_SA_Factions[bot->GetTeamId()];
+        if (!attacker)
+        {
+            GameObject* green = bg->GetBGObject(BG_SA_GREEN_GATE);
+            GameObject* blue = bg->GetBGObject(BG_SA_BLUE_GATE);
+            GameObject* gate = (green && blue) ? (bot->GetDistance(green) <= bot->GetDistance(blue) ? green : blue)
+                                               : (green ? green : blue);
+            if (gate)
+                MoveTo(bg->GetMapId(), gate->GetPositionX() + frand(-6.0f, 6.0f),
+                       gate->GetPositionY() + frand(-6.0f, 6.0f), gate->GetPositionZ());
         }
     }
 
@@ -3167,6 +3225,145 @@ bool BGTactics::selectObjective(bool reset)
             }
             break;
         }
+        case BATTLEGROUND_SA:
+        {
+            // Strand of the Ancients: a two-round siege BG. One team attacks (drive demolishers
+            // through the gates to the Titan Relic), the other defends (man the antipersonnel
+            // cannons, kill demolishers). Attacker/defender swaps each round, so the role is read
+            // fresh from the relic's faction: BattlegroundSA::ResetObjs gives the relic the
+            // *attacker* faction and the gates the defender faction.
+            GameObject* relic = bg->GetBGObject(BG_SA_TITAN_RELIC);
+            if (!relic)
+                break;
+
+            bool attacker = relic->GetUInt32Value(GAMEOBJECT_FACTION) == BG_SA_Factions[bot->GetTeamId()];
+
+            bool inVehicle = botAI->IsInVehicle();
+            bool controlsVehicle = botAI->IsInVehicle(true);
+
+            // passengers (ranged riding a demolisher) don't pick objectives - the driver does
+            if (inVehicle && !controlsVehicle)
+                return false;
+
+            // a gate counts as breached when its destructible building is destroyed (or gone)
+            auto gateDown = [&](uint32 idx) -> bool
+            {
+                GameObject* g = bg->GetBGObject(idx);
+                return !g || g->GetDestructibleState() == GO_DESTRUCTIBLE_DESTROYED;
+            };
+            auto nearestIntact = [&](uint32 a, uint32 b) -> GameObject*
+            {
+                GameObject* ga = gateDown(a) ? nullptr : bg->GetBGObject(a);
+                GameObject* gb = gateDown(b) ? nullptr : bg->GetBGObject(b);
+                if (ga && gb)
+                    return bot->GetDistance(ga) <= bot->GetDistance(gb) ? ga : gb;
+                return ga ? ga : gb;
+            };
+
+            // current front gate, in wave order: beach (green/blue) -> wall (red/purple) -> yellow -> ancient
+            GameObject* targetGate = nullptr;
+            if (!gateDown(BG_SA_GREEN_GATE) || !gateDown(BG_SA_BLUE_GATE))
+                targetGate = nearestIntact(BG_SA_GREEN_GATE, BG_SA_BLUE_GATE);
+            else if (!gateDown(BG_SA_RED_GATE) || !gateDown(BG_SA_PURPLE_GATE))
+                targetGate = nearestIntact(BG_SA_RED_GATE, BG_SA_PURPLE_GATE);
+            else if (!gateDown(BG_SA_YELLOW_GATE))
+                targetGate = bg->GetBGObject(BG_SA_YELLOW_GATE);
+            else if (!gateDown(BG_SA_ANCIENT_GATE))
+                targetGate = bg->GetBGObject(BG_SA_ANCIENT_GATE);
+
+            bool beachBreached = gateDown(BG_SA_GREEN_GATE) || gateDown(BG_SA_BLUE_GATE);
+            bool innerBreached = gateDown(BG_SA_YELLOW_GATE) && gateDown(BG_SA_ANCIENT_GATE);
+            uint32 role = context->GetValue<uint32>("bg role")->Get();
+
+            if (attacker)
+            {
+                // Beach landing: get attackers off the boats and onto the strand first. A
+                // docked-boat rider near the beach (or a bot stranded off-boat up north) heads to
+                // shore; a rider on a boat still at sea is left alone so it isn't pushed overboard.
+                // After the opening wave the core respawns attackers on the beach, so this mainly
+                // covers the initial landing.
+                if (!controlsVehicle)
+                {
+                    bool onBoat = bot->GetTransport() != nullptr;
+                    float distBeach = bot->GetExactDist2d(SA_BEACH_LANDING.GetPositionX(),
+                                                          SA_BEACH_LANDING.GetPositionY());
+                    if ((onBoat && distBeach < 130.0f) || (!onBoat && distBeach > 170.0f))
+                    {
+                        pos.Set(SA_BEACH_LANDING.GetPositionX() + frand(-6.0f, 6.0f),
+                                SA_BEACH_LANDING.GetPositionY() + frand(-6.0f, 6.0f),
+                                SA_BEACH_LANDING.GetPositionZ(), bot->GetMapId());
+                        posMap["bg objective"] = pos;
+                        return true;
+                    }
+                }
+
+                // Driving a demolisher: roll up to the front gate and aim the boulder at it.
+                if (controlsVehicle && targetGate)
+                {
+                    PositionInfo siegePos = context->GetValue<PositionMap&>("position")->Get()["bg siege"];
+                    siegePos.Set(targetGate->GetPositionX(), targetGate->GetPositionY(),
+                                 targetGate->GetPositionZ(), bot->GetMapId());
+                    posMap["bg siege"] = siegePos;
+                    pos.Set(targetGate->GetPositionX() + frand(-6.0f, 6.0f),
+                            targetGate->GetPositionY() + frand(-6.0f, 6.0f), targetGate->GetPositionZ(),
+                            bot->GetMapId());
+                    posMap["bg objective"] = pos;
+                    return true;
+                }
+
+                // Inner gates down -> rush the Titan Relic to win the round. On-foot only: a
+                // demolisher can neither climb to nor click the relic platform, so a driver with
+                // all gates down simply idles (returns false below) and lets foot troops finish.
+                if (innerBreached && !controlsVehicle)
+                    BgObjective = relic;
+                // Beach breached -> peel a few bots off to capture the side graveyards, which
+                // unlock the workshops (and their extra demolishers). Core rejects an already-
+                // owned graveyard, so bots naturally move on after a successful cap.
+                else if (beachBreached && role < 2)
+                    BgObjective = bg->GetBGObject(BG_SA_RIGHT_FLAG);  // east graveyard
+                else if (beachBreached && role < 4)
+                    BgObjective = bg->GetBGObject(BG_SA_LEFT_FLAG);  // west graveyard
+
+                // Otherwise press the assault: stage at the front gate so "enter vehicle" can grab
+                // a demolisher and so on-foot bots escort the tanks / fight at the breach.
+                if (!BgObjective && targetGate)
+                {
+                    pos.Set(targetGate->GetPositionX() + frand(-8.0f, 8.0f),
+                            targetGate->GetPositionY() + frand(-8.0f, 8.0f), targetGate->GetPositionZ(),
+                            bot->GetMapId());
+                    posMap["bg objective"] = pos;
+                    return true;
+                }
+            }
+            else  // defender
+            {
+                // Cannon gunners ride a cast-only seat (not a control seat), so they already
+                // returned at the passenger guard above and never reach here; their "rocket
+                // blast"/"fire cannon" actions aim the gun at the nearest demolisher/enemy.
+
+                // Hold the foremost threatened gate: man the guns and intercept demolishers.
+                if (targetGate)
+                {
+                    pos.Set(targetGate->GetPositionX() + frand(-8.0f, 8.0f),
+                            targetGate->GetPositionY() + frand(-8.0f, 8.0f), targetGate->GetPositionZ(),
+                            bot->GetMapId());
+                    posMap["bg objective"] = pos;
+                    return true;
+                }
+
+                // All gates down: last stand on the relic.
+                BgObjective = relic;
+            }
+
+            if (BgObjective)
+            {
+                pos.Set(BgObjective->GetPositionX(), BgObjective->GetPositionY(), BgObjective->GetPositionZ(),
+                        bot->GetMapId());
+                posMap["bg objective"] = pos;
+                return true;
+            }
+            break;
+        }
         default:
             break;
     }
@@ -3232,6 +3429,12 @@ bool BGTactics::selectObjectiveWp(std::vector<BattleBotPath*> const& vPaths)
 
     PositionInfo pos = context->GetValue<PositionMap&>("position")->Get()["bg objective"];
     if (!pos.isSet())
+        return false;
+
+    // Strand is objective-driven (gates/relic/graveyards) - never waypoint-wander. Returning
+    // false here makes the caller fall through to moveToObjective(true), which heads straight
+    // for the selectObjective target regardless of distance.
+    if (bgType == BATTLEGROUND_SA)
         return false;
 
     if (bgType == BATTLEGROUND_WS)
@@ -3446,7 +3649,7 @@ bool BGTactics::startNewPathBegin(std::vector<BattleBotPath*> const& vPaths)
     if (bgType == BATTLEGROUND_RB)
         bgType = bg->GetBgTypeID(true);
 
-    if (bgType == BATTLEGROUND_IC)
+    if (bgType == BATTLEGROUND_IC || bgType == BATTLEGROUND_SA)
         return false;
 
     PositionInfo pos = context->GetValue<PositionMap&>("position")->Get()["bg objective"];
@@ -3507,7 +3710,7 @@ bool BGTactics::startNewPathFree(std::vector<BattleBotPath*> const& vPaths)
     if (bgType == BATTLEGROUND_RB)
         bgType = bg->GetBgTypeID(true);
 
-    if (bgType == BATTLEGROUND_IC)
+    if (bgType == BATTLEGROUND_IC || bgType == BATTLEGROUND_SA)
         return false;
 
     PositionInfo pos = context->GetValue<PositionMap&>("position")->Get()["bg objective"];
@@ -3595,6 +3798,7 @@ bool BGTactics::atFlag(std::vector<BattleBotPath*> const& vPaths, std::vector<ui
         case BATTLEGROUND_AV:
         case BATTLEGROUND_AB:
         case BATTLEGROUND_IC:
+        case BATTLEGROUND_SA:
         {
             // For territory control BGs, use standard interaction range
             closeObjects = *context->GetValue<GuidVector>("closest game objects");
@@ -3833,6 +4037,53 @@ bool BGTactics::atFlag(std::vector<BattleBotPath*> const& vPaths, std::vector<ui
         // Handle capture mechanics based on BG type
         switch (bgType)
         {
+            case BATTLEGROUND_SA:
+            {
+                // The Titan Relic is "used" (not capture-channeled) to instantly win the round.
+                // Core gates this to attackers with the inner gates down, so a stray use is a
+                // harmless no-op.
+                if (go->GetEntry() == 192834)  // BG_SA_ObjEntries[BG_SA_TITAN_RELIC]
+                {
+                    if (dist >= INTERACTION_DISTANCE)
+                        return MoveTo(bot->GetMapId(), go->GetPositionX(), go->GetPositionY(), go->GetPositionZ());
+
+                    if (bot->IsMounted())
+                        bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+
+                    WorldPacket data(CMSG_GAMEOBJ_USE);
+                    data << go->GetGUID();
+                    bot->GetSession()->HandleGameObjectUseOpcode(data);
+                    resetObjective();
+                    return true;
+                }
+
+                // Graveyard banners capture exactly like Arathi Basin (channeled banner spell).
+                if (dist == 0.0f)
+                {
+                    float const moveDist = bot->GetObjectSize() + go->GetObjectSize() + 0.1f;
+                    return MoveTo(bot->GetMapId(), go->GetPositionX() + (urand(0, 1) ? -moveDist : moveDist),
+                                  go->GetPositionY() + (urand(0, 1) ? -moveDist : moveDist), go->GetPositionZ());
+                }
+
+                if (bot->IsMounted())
+                    bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+
+                if (bot->IsInDisallowedMountForm())
+                    bot->RemoveAurasByType(SPELL_AURA_MOD_SHAPESHIFT);
+
+                SpellInfo const* spellInfo = sSpellMgr->GetSpellInfo(SPELL_CAPTURE_BANNER);
+                if (!spellInfo)
+                    return false;
+
+                Spell* spell = new Spell(bot, spellInfo, TRIGGERED_NONE);
+                spell->m_targets.SetGOTarget(go);
+                spell->prepare(&spell->m_targets);
+
+                botAI->WaitForSpellCast(spell);
+
+                resetObjective();
+                return true;
+            }
             case BATTLEGROUND_AV:
             case BATTLEGROUND_AB:
             case BATTLEGROUND_IC:
@@ -4429,4 +4680,73 @@ bool ArenaTactics::moveToCenter(Battleground* bg)
     }
 
     return true;
+}
+
+bool SeaforiumAction::isUseful()
+{
+    Battleground* bg = bot->GetBattleground();
+    if (!bg)
+        return false;
+    BattlegroundTypeId bgType = bg->GetBgTypeID();
+    if (bgType == BATTLEGROUND_RB)
+        bgType = bg->GetBgTypeID(true);
+    return bgType == BATTLEGROUND_SA && !botAI->IsInVehicle();
+}
+
+bool SeaforiumAction::Execute(Event /*event*/)
+{
+    Battleground* bg = bot->GetBattleground();
+    if (!bg || bg->GetStatus() != STATUS_IN_PROGRESS)
+        return false;
+
+    // Attackers only: the Titan Relic carries the attacker faction (set in ResetObjs).
+    GameObject* relic = bg->GetBGObject(BG_SA_TITAN_RELIC);
+    if (!relic || relic->GetUInt32Value(GAMEOBJECT_FACTION) != BG_SA_Factions[bot->GetTeamId()])
+        return false;
+
+    // Not carrying a charge yet -> grab one from a pile that is already within reach.
+    if (bot->GetItemCount(ITEM_SA_SEAFORIUM_CHARGE) == 0)
+    {
+        GuidVector gos = *context->GetValue<GuidVector>("closest game objects");
+        for (ObjectGuid const& guid : gos)
+        {
+            GameObject* go = botAI->GetGameObject(guid);
+            if (!go || go->GetEntry() != GO_SA_SEAFORIUM_PILE)
+                continue;
+            if (!go->isSpawned() || go->GetGoState() != GO_STATE_READY)
+                continue;
+            if (bot->GetDistance(go) > INTERACTION_DISTANCE)
+                continue;
+
+            WorldPacket data(CMSG_GAMEOBJ_USE);
+            data << go->GetGUID();
+            bot->GetSession()->HandleGameObjectUseOpcode(data);
+            return true;
+        }
+        return false;
+    }
+
+    // Carrying a charge -> plant it on the nearest intact gate the bot is already next to.
+    static uint32 const saGates[6] = {BG_SA_GREEN_GATE, BG_SA_BLUE_GATE,   BG_SA_RED_GATE,
+                                      BG_SA_PURPLE_GATE, BG_SA_YELLOW_GATE, BG_SA_ANCIENT_GATE};
+    for (uint32 const idx : saGates)
+    {
+        GameObject* gate = bg->GetBGObject(idx);
+        if (!gate || gate->GetDestructibleState() == GO_DESTRUCTIBLE_DESTROYED)
+            continue;
+        if (bot->GetDistance(gate) > 6.0f)
+            continue;
+
+        Item* charge = bot->GetItemByEntry(ITEM_SA_SEAFORIUM_CHARGE);
+        if (!charge)
+            return false;
+
+        if (bot->IsMounted())
+            bot->RemoveAurasByType(SPELL_AURA_MOUNTED);
+        if (bot->isMoving())
+            bot->StopMoving();
+
+        return UseItemAuto(charge);
+    }
+    return false;
 }

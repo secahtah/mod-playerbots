@@ -8,6 +8,7 @@
 
 #include "BattlegroundAV.h"
 #include "MovementActions.h"
+#include "UseItemAction.h"
 
 class ChatHandler;
 class Battleground;
@@ -101,6 +102,7 @@ extern std::vector<BattleBotPath*> const vPaths_AB;
 extern std::vector<BattleBotPath*> const vPaths_AV;
 extern std::vector<BattleBotPath*> const vPaths_EY;
 extern std::vector<BattleBotPath*> const vPaths_IC;
+extern std::vector<BattleBotPath*> const vPaths_SA;
 
 class BGTactics : public MovementAction
 {
@@ -142,6 +144,18 @@ public:
 
 private:
     bool moveToCenter(Battleground* bg);
+};
+
+// Strand of the Ancients: opportunistically grab a Massive Seaforium Charge from a beach
+// pile, then plant it on the nearest intact gate. Supplements the demolisher assault - it
+// only acts when a pile/gate is already within reach, so it never diverts the bot.
+class SeaforiumAction : public UseItemAction
+{
+public:
+    SeaforiumAction(PlayerbotAI* botAI) : UseItemAction(botAI, "plant seaforium") {}
+
+    bool Execute(Event event) override;
+    bool isUseful() override;
 };
 
 #endif

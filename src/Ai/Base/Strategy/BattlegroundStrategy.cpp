@@ -80,6 +80,26 @@ void IsleStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     triggers.push_back(new TriggerNode("in vehicle", { NextAction("glaive throw", ACTION_MOVE + 9.0f)}));
 }
 
+// Strand of the Ancients: vehicle-driven siege BG.
+// Attackers drive Battleground Demolishers (Hurl Boulder) at gates; defenders man
+// Antipersonnel Cannons (Rocket Blast). The cast actions resolve the right spell from
+// whichever vehicle the bot boarded, so the same trigger set serves both roles.
+// NOTE: deliberately no "random -> leave vehicle" trigger (unlike Isle): an SA demolisher
+// driver must keep driving the tank to the gate, never abandon it.
+void StrandStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
+{
+    triggers.push_back(new TriggerNode("bg active", { NextAction("bg check flag", ACTION_MOVE)}));
+    triggers.push_back(new TriggerNode("timer", { NextAction("enter vehicle", ACTION_MOVE + 8.0f)}));
+    triggers.push_back(new TriggerNode("in vehicle", { NextAction("hurl boulder", ACTION_MOVE + 9.0f)}));
+    triggers.push_back(new TriggerNode("in vehicle", { NextAction("rocket blast", ACTION_MOVE + 9.0f)}));
+    triggers.push_back(new TriggerNode("in vehicle", { NextAction("fire cannon", ACTION_MOVE + 9.0f)}));
+    triggers.push_back(new TriggerNode("enemy is close", { NextAction("ram", ACTION_MOVE + 9.1f)}));
+    triggers.push_back(new TriggerNode("in vehicle", { NextAction("ram", ACTION_MOVE + 8.5f)}));
+    // On-foot: grab a seaforium charge off a beach pile and plant it on an adjacent gate
+    // (opportunistic - only fires when a pile/gate is already in reach, never diverts the bot).
+    triggers.push_back(new TriggerNode("bg active", { NextAction("plant seaforium", ACTION_NORMAL)}));
+}
+
 void ArenaStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
 {
     triggers.push_back(
