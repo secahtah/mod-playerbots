@@ -104,6 +104,9 @@ void StrandStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)
     // On-foot: grab a seaforium charge off a beach pile and plant it on an adjacent gate
     // (opportunistic - only fires when a pile/gate is already in reach, never diverts the bot).
     triggers.push_back(new TriggerNode("bg active", { NextAction("plant seaforium", ACTION_NORMAL)}));
+    // Ground troops engage siege vehicles: stock PvP targeting only considers players, so
+    // without this a defender ignores an enemy demolisher rolling straight past.
+    triggers.push_back(new TriggerNode("enemy vehicle near", { NextAction("attack enemy vehicle", ACTION_RAID + 1.0f)}));
 }
 
 void ArenaStrategy::InitTriggers(std::vector<TriggerNode*>& triggers)

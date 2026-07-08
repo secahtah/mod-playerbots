@@ -45,6 +45,30 @@ void NearestVehiclesValue::FindUnits(std::list<Unit*>& targets)
     Cell::VisitObjects(bot, searcher, range);
 }
 
+Unit* EnemyVehicleTargetValue::Calculate()
+{
+    std::list<Unit*> targets;
+    Acore::AnyUnitInObjectRangeCheck u_check(bot, 120.0f);
+    Acore::UnitListSearcher<Acore::AnyUnitInObjectRangeCheck> searcher(bot, targets, u_check);
+    Cell::VisitObjects(bot, searcher, 120.0f);
+
+    Unit* best = nullptr;
+    float bestDist = 100000.0f;
+    for (Unit* unit : targets)
+    {
+        if (!unit->IsVehicle() || !unit->IsAlive() || !bot->IsValidAttackTarget(unit))
+            continue;
+
+        float dist = bot->GetDistance(unit);
+        if (dist < bestDist)
+        {
+            bestDist = dist;
+            best = unit;
+        }
+    }
+    return best;
+}
+
 bool NearestVehiclesValue::AcceptUnit(Unit* unit)
 {
     if (!unit || !unit->IsVehicle() || !unit->IsAlive())

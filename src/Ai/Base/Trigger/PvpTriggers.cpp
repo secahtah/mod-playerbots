@@ -52,6 +52,15 @@ bool BgWaitingTrigger::IsActive()
     return false;
 }
 
+bool EnemyVehicleNearTrigger::IsActive()
+{
+    if (!bot->InBattleground() || botAI->IsInVehicle())
+        return false;
+
+    Unit* vehicle = AI_VALUE(Unit*, "enemy vehicle target");
+    return vehicle && bot->GetDistance(vehicle) < 45.0f;
+}
+
 bool BgActiveTrigger::IsActive()
 {
     if (bot->InBattleground())

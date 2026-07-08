@@ -227,6 +227,7 @@ public:
         creators["bg announce"] = &ActionContext::bg_announce;
         creators["plant seaforium"] = &ActionContext::plant_seaforium;
         creators["attack enemy flag carrier"] = &ActionContext::attack_enemy_fc;
+        creators["attack enemy vehicle"] = &ActionContext::attack_enemy_vehicle;
         creators["bg check flag"] = &ActionContext::bg_check_flag;
 
         // Vehicles
@@ -433,6 +434,7 @@ private:
     static Action* bg_attack_fc(PlayerbotAI* botAI) { return new BGTactics(botAI, "attack fc"); }
     static Action* bg_protect_fc(PlayerbotAI* botAI) { return new BGTactics(botAI, "protect fc"); }
     static Action* attack_enemy_fc(PlayerbotAI* botAI) { return new AttackEnemyFlagCarrierAction(botAI); }
+    static Action* attack_enemy_vehicle(PlayerbotAI* botAI) { return new AttackEnemyVehicleAction(botAI); }
     static Action* bg_use_buff(PlayerbotAI* botAI) { return new BGTactics(botAI, "use buff"); }
     static Action* bg_announce(PlayerbotAI* botAI) { return new BGTactics(botAI, "announce"); }
     static Action* plant_seaforium(PlayerbotAI* botAI) { return new SeaforiumAction(botAI); }

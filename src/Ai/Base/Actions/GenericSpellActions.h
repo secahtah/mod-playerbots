@@ -410,6 +410,8 @@ public:
     ActionThreatType getThreatType() override { return ActionThreatType::None; }
 
 protected:
+    Unit* ResolveTarget();
+
     WorldObject* spellTarget;
 };
 

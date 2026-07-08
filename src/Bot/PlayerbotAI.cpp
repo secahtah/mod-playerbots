@@ -3955,7 +3955,11 @@ bool PlayerbotAI::CanCastVehicleSpell(uint32 spellId, Unit* target)
     if (!spellId)
         return false;
 
-    if (!IsValidUnit(target))
+    // A null target is LEGAL here: it selects the location-based siege cast at the
+    // "bg siege" position set by BGTactics (demolisher/glaive fire at a BG gate).
+    // Rejecting null up front made that entire path below unreachable - vehicle bots
+    // could park at a gate but never fire at it.
+    if (target && !IsValidUnit(target))
         return false;
 
     Vehicle* vehicle = bot->GetVehicle();
@@ -4040,7 +4044,11 @@ bool PlayerbotAI::CastVehicleSpell(uint32 spellId, Unit* target)
     if (!spellId)
         return false;
 
-    if (!IsValidUnit(target))
+    // A null target is LEGAL here: it selects the location-based siege cast at the
+    // "bg siege" position set by BGTactics (demolisher/glaive fire at a BG gate).
+    // Rejecting null up front made that entire path below unreachable - vehicle bots
+    // could park at a gate but never fire at it.
+    if (target && !IsValidUnit(target))
         return false;
 
     Vehicle* vehicle = bot->GetVehicle();

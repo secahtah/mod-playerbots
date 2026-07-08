@@ -14,6 +14,7 @@
 #include "Opcodes.h"
 #include "Player.h"
 #include "Playerbots.h"
+#include "PositionValue.h"
 #include "ServerFacade.h"
 #include "WorldPacket.h"
 #include "Group.h"
@@ -474,10 +475,26 @@ std::string const CastProtectSpellAction::GetTargetName() { return "party member
 
 bool CastProtectSpellAction::isUseful() { return GetTarget() && !botAI->HasAura(spell, GetTarget()); }
 
+// With no unit target, a gunner falls back to the nearest hostile vehicle — that is how
+// SA antipersonnel cannons engage demolishers. A set "bg siege" position wins (attacker
+// demolishers keep shelling the gate, not counter-battery), and stays handled by the
+// null-target path inside Can/CastVehicleSpell.
+Unit* CastVehicleSpellAction::ResolveTarget()
+{
+    Unit* target = GetTarget();
+    if (!target)
+    {
+        PositionInfo siegePos = context->GetValue<PositionMap&>("position")->Get()["bg siege"];
+        if (!siegePos.isSet())
+            target = AI_VALUE(Unit*, "enemy vehicle target");
+    }
+    return target;
+}
+
 bool CastVehicleSpellAction::isPossible()
 {
     uint32 spellId = AI_VALUE2(uint32, "vehicle spell id", spell);
-    return botAI->CanCastVehicleSpell(spellId, GetTarget());
+    return botAI->CanCastVehicleSpell(spellId, ResolveTarget());
 }
 
 bool CastVehicleSpellAction::isUseful() { return botAI->IsInVehicle(false, true); }
@@ -485,7 +502,7 @@ bool CastVehicleSpellAction::isUseful() { return botAI->IsInVehicle(false, true)
 bool CastVehicleSpellAction::Execute(Event /*event*/)
 {
     uint32 spellId = AI_VALUE2(uint32, "vehicle spell id", spell);
-    return botAI->CastVehicleSpell(spellId, GetTarget());
+    return botAI->CastVehicleSpell(spellId, ResolveTarget());
 }
 
 bool CastEveryManForHimselfAction::isPossible()

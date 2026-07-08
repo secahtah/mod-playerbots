@@ -85,6 +85,15 @@ public:
     bool IsActive() override;
 };
 
+// A hostile siege vehicle is within engagement range of this on-foot BG bot.
+class EnemyVehicleNearTrigger : public Trigger
+{
+public:
+    EnemyVehicleNearTrigger(PlayerbotAI* botAI) : Trigger(botAI, "enemy vehicle near") {}
+
+    bool IsActive() override;
+};
+
 class BgActiveTrigger : public Trigger
 {
 public:

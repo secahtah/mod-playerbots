@@ -50,6 +50,18 @@ protected:
     bool AcceptUnit(Unit* unit) override;
 };
 
+// Nearest hostile vehicle unit (SA/IC siege engines) the bot could attack. Used by the
+// "enemy vehicle near"/"attack enemy vehicle" ground defense and as the gunner fallback
+// target for vehicle cast actions - stock PvP targeting only ever considers players, so
+// bots otherwise ignore an enemy demolisher rolling past.
+class EnemyVehicleTargetValue : public UnitCalculatedValue
+{
+public:
+    EnemyVehicleTargetValue(PlayerbotAI* botAI) : UnitCalculatedValue(botAI, "enemy vehicle target") {}
+
+    Unit* Calculate() override;
+};
+
 class NearestTriggersValue : public NearestUnitsValue
 {
 public:

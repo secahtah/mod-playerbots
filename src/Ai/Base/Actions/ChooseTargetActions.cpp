@@ -189,3 +189,5 @@ bool AttackRtiTargetAction::isUseful()
 
     return true;
 }
+
+bool AttackEnemyVehicleAction::isUseful() { return bot->InBattleground() && !botAI->IsInVehicle(); }

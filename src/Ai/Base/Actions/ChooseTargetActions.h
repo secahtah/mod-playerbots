@@ -91,6 +91,16 @@ public:
     bool isUseful() override;
 };
 
+// Engage a hostile siege vehicle (SA demolisher rolling at the gate the bot defends).
+class AttackEnemyVehicleAction : public AttackAction
+{
+public:
+    AttackEnemyVehicleAction(PlayerbotAI* botAI) : AttackAction(botAI, "attack enemy vehicle") {}
+
+    std::string const GetTargetName() override { return "enemy vehicle target"; }
+    bool isUseful() override;
+};
+
 class DropTargetAction : public Action
 {
 public:

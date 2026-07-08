@@ -1214,20 +1214,291 @@ std::vector<BattleBotPath*> const vPaths_IC = {
     &vPath_IC_Hanger_to_Workshop,
 };
 
-// Strand of the Ancients is fully objective-driven (like Isle of Conquest): bots pursue
-// gates/graveyards/relic via selectObjective, never random waypoint-wander. This single
-// beach->relic lane exists only to satisfy the framework's non-empty vPaths requirement;
-// selectObjectiveWp short-circuits for SA so it is not actually walked.
-BattleBotPath vPath_SA_Beach_to_Relic = {
-    {1438.0f, -50.0f, 30.0f, nullptr},   // beach approach
-    {1280.0f, -60.0f, 50.0f, nullptr},   // toward second wall
-    {1055.0f, -108.0f, 82.0f, nullptr},  // yellow gate
-    {878.0f, -108.0f, 117.0f, nullptr},  // ancient gate
-    {837.0f, -107.0f, 127.0f, nullptr},  // titan relic
+// Strand of the Ancients path network. Anchors = core BG_SA_ObjSpawnlocs, DB
+// game_graveyard rows and the defender teleport spot; intermediates interpolated at
+// ~12 yd so the 1-5 point walk hop stays well inside pathfinder range. Paths are
+// SEGMENTED PER OBJECTIVE (gate/flag/relic endpoints) because selectObjectiveWp
+// scores paths by endpoint distance to the objective - mid-path objectives are
+// unreachable by design. Bots chain legs via path-end resetObjective/reselect.
+// north beach: boat graveyard -> landing -> beach graveyard -> green gate
+BattleBotPath vPath_SA_BoatGY_to_GreenGate = {
+    {1617.2f, 31.3f, 8.3f, nullptr},  // boat graveyard
+    {1614.1f, 18.2f, 8.5f, nullptr},
+    {1611.1f, 5.1f, 8.8f, nullptr},
+    {1608.0f, -8.0f, 9.0f, nullptr},
+    {1605.5f, -20.7f, 9.0f, nullptr},
+    {1602.9f, -33.3f, 9.0f, nullptr},
+    {1600.4f, -46.0f, 9.0f, nullptr},
+    {1599.3f, -58.0f, 9.0f, nullptr},
+    {1598.2f, -70.0f, 9.0f, nullptr},
+    {1597.2f, -82.0f, 9.0f, nullptr},
+    {1596.1f, -94.0f, 9.0f, nullptr},
+    {1595.0f, -106.0f, 9.0f, nullptr},  // beach landing
+    {1583.3f, -102.3f, 9.3f, nullptr},
+    {1571.7f, -98.7f, 9.7f, nullptr},
+    {1560.0f, -95.0f, 10.0f, nullptr},
+    {1548.3f, -91.0f, 10.7f, nullptr},
+    {1536.7f, -87.0f, 11.3f, nullptr},
+    {1525.0f, -83.0f, 12.0f, nullptr},
+    {1513.3f, -78.7f, 12.7f, nullptr},
+    {1501.7f, -74.3f, 13.3f, nullptr},
+    {1490.0f, -70.0f, 14.0f, nullptr},
+    {1479.1f, -64.6f, 11.1f, nullptr},
+    {1468.1f, -59.1f, 8.1f, nullptr},
+    {1457.2f, -53.7f, 5.2f, nullptr},  // beach graveyard
+    {1453.1f, -42.5f, 7.5f, nullptr},
+    {1449.1f, -31.2f, 9.7f, nullptr},
+    {1445.0f, -20.0f, 12.0f, nullptr},
+    {1443.3f, -8.3f, 14.0f, nullptr},
+    {1441.7f, 3.3f, 16.0f, nullptr},
+    {1440.0f, 15.0f, 18.0f, nullptr},
+    {1437.3f, 26.7f, 20.0f, nullptr},
+    {1434.7f, 38.3f, 22.0f, nullptr},
+    {1432.0f, 50.0f, 24.0f, nullptr},
+    {1428.7f, 60.0f, 25.0f, nullptr},
+    {1425.3f, 70.0f, 26.0f, nullptr},
+    {1422.0f, 80.0f, 27.0f, nullptr},
+    {1418.5f, 89.4f, 27.6f, nullptr},
+    {1415.1f, 98.8f, 28.1f, nullptr},
+    {1411.6f, 108.2f, 28.7f, nullptr},  // green gate
 };
-
+// south beach: landing -> blue gate
+BattleBotPath vPath_SA_Landing_to_BlueGate = {
+    {1595.0f, -106.0f, 9.0f, nullptr},  // beach landing
+    {1586.2f, -112.0f, 9.5f, nullptr},
+    {1577.5f, -118.0f, 10.0f, nullptr},
+    {1568.8f, -124.0f, 10.5f, nullptr},
+    {1560.0f, -130.0f, 11.0f, nullptr},
+    {1550.0f, -137.5f, 12.2f, nullptr},
+    {1540.0f, -145.0f, 13.5f, nullptr},
+    {1530.0f, -152.5f, 14.8f, nullptr},
+    {1520.0f, -160.0f, 16.0f, nullptr},
+    {1510.0f, -167.5f, 17.5f, nullptr},
+    {1500.0f, -175.0f, 19.0f, nullptr},
+    {1490.0f, -182.5f, 20.5f, nullptr},
+    {1480.0f, -190.0f, 22.0f, nullptr},
+    {1471.7f, -195.7f, 23.7f, nullptr},
+    {1463.3f, -201.3f, 25.3f, nullptr},
+    {1455.0f, -207.0f, 27.0f, nullptr},
+    {1443.2f, -213.2f, 28.9f, nullptr},
+    {1431.3f, -219.4f, 30.9f, nullptr},  // blue gate
+};
+// north road: green gate -> purple gate
+BattleBotPath vPath_SA_GreenGate_to_PurpleGate = {
+    {1411.6f, 108.2f, 28.7f, nullptr},  // green gate
+    {1399.3f, 106.6f, 29.6f, nullptr},
+    {1387.0f, 104.9f, 30.4f, nullptr},
+    {1374.6f, 103.3f, 31.3f, nullptr},
+    {1362.3f, 101.6f, 32.1f, nullptr},
+    {1350.0f, 100.0f, 33.0f, nullptr},
+    {1337.0f, 98.4f, 34.8f, nullptr},
+    {1324.0f, 96.8f, 36.6f, nullptr},
+    {1311.0f, 95.2f, 38.4f, nullptr},
+    {1298.0f, 93.6f, 40.2f, nullptr},
+    {1285.0f, 92.0f, 42.0f, nullptr},
+    {1273.3f, 90.2f, 43.9f, nullptr},
+    {1261.6f, 88.4f, 45.8f, nullptr},
+    {1249.8f, 86.6f, 47.7f, nullptr},
+    {1238.1f, 84.8f, 49.6f, nullptr},
+    {1226.4f, 83.0f, 51.5f, nullptr},
+    {1214.7f, 81.2f, 53.4f, nullptr},  // purple gate
+};
+// south road: blue gate -> red gate
+BattleBotPath vPath_SA_BlueGate_to_RedGate = {
+    {1431.3f, -219.4f, 30.9f, nullptr},  // blue gate
+    {1419.0f, -218.3f, 31.9f, nullptr},
+    {1406.8f, -217.2f, 32.9f, nullptr},
+    {1394.5f, -216.2f, 34.0f, nullptr},
+    {1382.3f, -215.1f, 35.0f, nullptr},
+    {1370.0f, -214.0f, 36.0f, nullptr},
+    {1358.3f, -213.7f, 37.5f, nullptr},
+    {1346.7f, -213.3f, 39.0f, nullptr},
+    {1335.0f, -213.0f, 40.5f, nullptr},
+    {1323.3f, -212.7f, 42.0f, nullptr},
+    {1311.7f, -212.3f, 43.5f, nullptr},
+    {1300.0f, -212.0f, 45.0f, nullptr},
+    {1288.0f, -212.1f, 46.7f, nullptr},
+    {1275.9f, -212.2f, 48.5f, nullptr},
+    {1263.8f, -212.3f, 50.2f, nullptr},
+    {1251.8f, -212.4f, 51.9f, nullptr},
+    {1239.8f, -212.5f, 53.7f, nullptr},
+    {1227.7f, -212.6f, 55.4f, nullptr},  // red gate
+};
+// north approach to the second wall: purple gate -> yellow gate
+BattleBotPath vPath_SA_PurpleGate_to_YellowGate = {
+    {1214.7f, 81.2f, 53.4f, nullptr},  // purple gate
+    {1207.5f, 71.6f, 54.8f, nullptr},
+    {1200.3f, 62.0f, 56.2f, nullptr},
+    {1193.1f, 52.5f, 57.6f, nullptr},
+    {1185.9f, 42.9f, 59.0f, nullptr},
+    {1178.8f, 33.3f, 60.4f, nullptr},
+    {1171.6f, 23.7f, 61.8f, nullptr},
+    {1164.4f, 14.2f, 63.2f, nullptr},
+    {1157.2f, 4.6f, 64.6f, nullptr},
+    {1150.0f, -5.0f, 66.0f, nullptr},
+    {1142.3f, -14.3f, 67.4f, nullptr},
+    {1134.6f, -23.6f, 68.9f, nullptr},
+    {1126.9f, -32.9f, 70.3f, nullptr},
+    {1119.1f, -42.1f, 71.7f, nullptr},
+    {1111.4f, -51.4f, 73.1f, nullptr},
+    {1103.7f, -60.7f, 74.6f, nullptr},
+    {1096.0f, -70.0f, 76.0f, nullptr},
+    {1087.9f, -77.6f, 77.2f, nullptr},
+    {1079.8f, -85.2f, 78.4f, nullptr},
+    {1071.7f, -92.9f, 79.7f, nullptr},
+    {1063.6f, -100.5f, 80.9f, nullptr},
+    {1055.5f, -108.1f, 82.1f, nullptr},  // yellow gate
+};
+// south approach to the second wall: red gate -> yellow gate
+BattleBotPath vPath_SA_RedGate_to_YellowGate = {
+    {1227.7f, -212.6f, 55.4f, nullptr},  // red gate
+    {1219.8f, -204.3f, 57.0f, nullptr},
+    {1211.8f, -196.1f, 58.6f, nullptr},
+    {1203.8f, -187.8f, 60.2f, nullptr},
+    {1195.9f, -179.5f, 61.8f, nullptr},
+    {1188.0f, -171.3f, 63.4f, nullptr},
+    {1180.0f, -163.0f, 65.0f, nullptr},
+    {1170.8f, -156.7f, 66.8f, nullptr},
+    {1161.7f, -150.3f, 68.7f, nullptr},
+    {1152.5f, -144.0f, 70.5f, nullptr},
+    {1143.3f, -137.7f, 72.3f, nullptr},
+    {1134.2f, -131.3f, 74.2f, nullptr},
+    {1125.0f, -125.0f, 76.0f, nullptr},
+    {1113.4f, -122.2f, 77.0f, nullptr},
+    {1101.8f, -119.4f, 78.0f, nullptr},
+    {1090.2f, -116.5f, 79.0f, nullptr},
+    {1078.7f, -113.7f, 80.1f, nullptr},
+    {1067.1f, -110.9f, 81.1f, nullptr},
+    {1055.5f, -108.1f, 82.1f, nullptr},  // yellow gate
+};
+// courtyard: yellow gate -> chamber of ancient relics gate
+BattleBotPath vPath_SA_YellowGate_to_AncientGate = {
+    {1055.5f, -108.1f, 82.1f, nullptr},  // yellow gate
+    {1043.7f, -108.1f, 84.5f, nullptr},
+    {1031.9f, -108.1f, 86.9f, nullptr},
+    {1020.1f, -108.1f, 89.2f, nullptr},
+    {1008.3f, -108.1f, 91.6f, nullptr},
+    {996.5f, -108.1f, 94.0f, nullptr},
+    {984.7f, -108.1f, 96.4f, nullptr},
+    {972.9f, -108.1f, 98.8f, nullptr},
+    {961.2f, -108.2f, 101.1f, nullptr},
+    {949.4f, -108.2f, 103.5f, nullptr},
+    {937.6f, -108.2f, 105.9f, nullptr},
+    {925.8f, -108.2f, 108.3f, nullptr},
+    {914.0f, -108.2f, 110.7f, nullptr},
+    {902.2f, -108.2f, 113.0f, nullptr},
+    {890.4f, -108.2f, 115.4f, nullptr},
+    {878.6f, -108.2f, 117.8f, nullptr},  // ancient gate
+};
+// final steps: ancient gate -> titan relic
+BattleBotPath vPath_SA_AncientGate_to_Relic = {
+    {878.6f, -108.2f, 117.8f, nullptr},  // ancient gate
+    {864.8f, -108.0f, 120.9f, nullptr},
+    {850.9f, -107.7f, 123.9f, nullptr},
+    {837.1f, -107.5f, 127.0f, nullptr},  // titan relic
+};
+// defender feeder: defender start plateau -> yellow gate
+BattleBotPath vPath_SA_DefSpawn_to_YellowGate = {
+    {1232.4f, -65.7f, 70.1f, nullptr},  // defender start / central GY flag
+    {1220.6f, -68.5f, 70.9f, nullptr},
+    {1208.9f, -71.2f, 71.8f, nullptr},
+    {1197.1f, -74.0f, 72.6f, nullptr},
+    {1185.3f, -76.7f, 73.5f, nullptr},
+    {1173.5f, -79.5f, 74.3f, nullptr},
+    {1161.8f, -82.2f, 75.2f, nullptr},
+    {1150.0f, -85.0f, 76.0f, nullptr},
+    {1138.4f, -88.2f, 77.0f, nullptr},
+    {1126.8f, -91.4f, 78.0f, nullptr},
+    {1115.2f, -94.6f, 79.0f, nullptr},
+    {1103.6f, -97.8f, 80.0f, nullptr},
+    {1092.0f, -101.0f, 81.0f, nullptr},
+    {1079.8f, -103.4f, 81.4f, nullptr},
+    {1067.7f, -105.7f, 81.7f, nullptr},
+    {1055.5f, -108.1f, 82.1f, nullptr},  // yellow gate
+};
+// defender feeder: defender start plateau -> purple gate
+BattleBotPath vPath_SA_DefSpawn_to_PurpleGate = {
+    {1232.4f, -65.7f, 70.1f, nullptr},  // defender start
+    {1230.3f, -53.1f, 68.8f, nullptr},
+    {1228.3f, -40.5f, 67.4f, nullptr},
+    {1226.2f, -27.9f, 66.0f, nullptr},
+    {1224.1f, -15.2f, 64.7f, nullptr},
+    {1222.1f, -2.6f, 63.4f, nullptr},
+    {1220.0f, 10.0f, 62.0f, nullptr},
+    {1219.1f, 21.9f, 60.6f, nullptr},
+    {1218.2f, 33.7f, 59.1f, nullptr},
+    {1217.3f, 45.6f, 57.7f, nullptr},
+    {1216.5f, 57.5f, 56.3f, nullptr},
+    {1215.6f, 69.3f, 54.8f, nullptr},
+    {1214.7f, 81.2f, 53.4f, nullptr},  // purple gate
+};
+// defender feeder: defender start plateau -> red gate
+BattleBotPath vPath_SA_DefSpawn_to_RedGate = {
+    {1232.4f, -65.7f, 70.1f, nullptr},  // defender start
+    {1231.7f, -78.1f, 68.8f, nullptr},
+    {1230.9f, -90.5f, 67.4f, nullptr},
+    {1230.2f, -102.8f, 66.0f, nullptr},
+    {1229.5f, -115.2f, 64.7f, nullptr},
+    {1228.7f, -127.6f, 63.4f, nullptr},
+    {1228.0f, -140.0f, 62.0f, nullptr},
+    {1228.0f, -152.1f, 60.9f, nullptr},
+    {1227.9f, -164.2f, 59.8f, nullptr},
+    {1227.8f, -176.3f, 58.7f, nullptr},
+    {1227.8f, -188.4f, 57.6f, nullptr},
+    {1227.8f, -200.5f, 56.5f, nullptr},
+    {1227.7f, -212.6f, 55.4f, nullptr},  // red gate
+};
+// defender feeder: final graveyard -> ancient gate
+BattleBotPath vPath_SA_FinalGY_to_AncientGate = {
+    {964.6f, -189.8f, 90.7f, nullptr},  // defender final graveyard
+    {956.0f, -179.9f, 93.0f, nullptr},
+    {947.3f, -169.9f, 95.3f, nullptr},
+    {938.6f, -159.9f, 97.7f, nullptr},
+    {930.0f, -150.0f, 100.0f, nullptr},
+    {922.0f, -142.5f, 102.8f, nullptr},
+    {914.0f, -135.0f, 105.5f, nullptr},
+    {906.0f, -127.5f, 108.2f, nullptr},
+    {898.0f, -120.0f, 111.0f, nullptr},
+    {888.3f, -114.1f, 114.4f, nullptr},
+    {878.6f, -108.2f, 117.8f, nullptr},  // ancient gate
+};
+// graveyard spur: south road -> west capturable GY flag
+BattleBotPath vPath_SA_SouthRoad_to_WestGY = {
+    {1370.0f, -214.0f, 36.0f, nullptr},  // south road
+    {1364.8f, -203.9f, 35.1f, nullptr},
+    {1359.6f, -193.8f, 34.3f, nullptr},
+    {1354.5f, -183.7f, 33.5f, nullptr},
+    {1349.3f, -173.5f, 32.6f, nullptr},
+    {1344.1f, -163.4f, 31.8f, nullptr},
+    {1338.9f, -153.3f, 30.9f, nullptr},  // west GY flag
+};
+// graveyard spur: north road -> east capturable GY flag
+BattleBotPath vPath_SA_NorthRoad_to_EastGY = {
+    {1350.0f, 100.0f, 33.0f, nullptr},  // north road
+    {1344.9f, 88.7f, 32.7f, nullptr},
+    {1339.8f, 77.3f, 32.5f, nullptr},
+    {1334.7f, 66.0f, 32.2f, nullptr},
+    {1329.5f, 54.7f, 31.9f, nullptr},
+    {1324.4f, 43.4f, 31.7f, nullptr},
+    {1319.3f, 32.1f, 31.4f, nullptr},
+    {1314.2f, 20.7f, 31.2f, nullptr},
+    {1309.1f, 9.4f, 30.9f, nullptr},  // east GY flag
+};
 std::vector<BattleBotPath*> const vPaths_SA = {
-    &vPath_SA_Beach_to_Relic,
+    &vPath_SA_BoatGY_to_GreenGate,
+    &vPath_SA_Landing_to_BlueGate,
+    &vPath_SA_GreenGate_to_PurpleGate,
+    &vPath_SA_BlueGate_to_RedGate,
+    &vPath_SA_PurpleGate_to_YellowGate,
+    &vPath_SA_RedGate_to_YellowGate,
+    &vPath_SA_YellowGate_to_AncientGate,
+    &vPath_SA_AncientGate_to_Relic,
+    &vPath_SA_DefSpawn_to_YellowGate,
+    &vPath_SA_DefSpawn_to_PurpleGate,
+    &vPath_SA_DefSpawn_to_RedGate,
+    &vPath_SA_FinalGY_to_AncientGate,
+    &vPath_SA_SouthRoad_to_WestGY,
+    &vPath_SA_NorthRoad_to_EastGY,
 };
 
 std::vector<BattleBotPath*> const vPaths_NoReverseAllowed = {
@@ -1908,18 +2179,26 @@ bool BGTactics::moveToStart(bool force)
     }
     else if (bgType == BATTLEGROUND_SA)
     {
-        // Defenders use the warmup to move up to the beach walls and man the guns; attackers
-        // wait on the two boats (the core moves the transports - never path them into the sea).
+        // Warmup positioning. Attackers: bots cannot ride the boats (transport boarding is
+        // client-driven), so instead of hovering at the boat spawn out at sea for the whole
+        // countdown, pre-stage the landing party on the beach. Defenders: man WALL 2 posts -
+        // the old walk to green/blue routed the platoon through the intact purple/red arches
+        // (gates are invisible to the navmesh = visible clipping).
         GameObject* relic = bg->GetBGObject(BG_SA_TITAN_RELIC);
         bool attacker = relic && relic->GetUInt32Value(GAMEOBJECT_FACTION) == BG_SA_Factions[bot->GetTeamId()];
-        if (!attacker)
+        if (attacker)
         {
-            GameObject* green = bg->GetBGObject(BG_SA_GREEN_GATE);
-            GameObject* blue = bg->GetBGObject(BG_SA_BLUE_GATE);
-            GameObject* gate = (green && blue) ? (bot->GetDistance(green) <= bot->GetDistance(blue) ? green : blue)
-                                               : (green ? green : blue);
+            if (!bot->GetTransport() && bot->GetPositionX() > 1650.0f)
+                bot->TeleportTo(bg->GetMapId(), SA_BEACH_LANDING.GetPositionX() + frand(-8.0f, 8.0f),
+                                SA_BEACH_LANDING.GetPositionY() + frand(-8.0f, 8.0f),
+                                SA_BEACH_LANDING.GetPositionZ(), SA_BEACH_LANDING.GetOrientation());
+        }
+        else
+        {
+            uint32 role = context->GetValue<uint32>("bg role")->Get();
+            GameObject* gate = bg->GetBGObject(role < 5 ? BG_SA_RED_GATE : BG_SA_PURPLE_GATE);
             if (gate)
-                MoveTo(bg->GetMapId(), gate->GetPositionX() + frand(-6.0f, 6.0f),
+                MoveTo(bg->GetMapId(), gate->GetPositionX() + frand(-12.0f, -4.0f),
                        gate->GetPositionY() + frand(-6.0f, 6.0f), gate->GetPositionZ());
         }
     }
@@ -3290,12 +3569,19 @@ bool BGTactics::selectObjective(bool reset)
                 return ga ? ga : gb;
             };
 
-            // current front gate, in wave order: beach (green/blue) -> wall (red/purple) -> yellow -> ancient
+            // Assault target: mass ONE flank and push THROUGH the breach. Real SA needs only
+            // one gate per tier (green->purple or blue->red, then yellow, then the chamber);
+            // the old wave order (both front gates before tier 2) parked the assault in front
+            // of the second front gate while the breach stood open. Flank is picked per
+            // instance so the whole team masses the same axis - "all tanks to one gate".
+            bool const southFlank = (bg->GetInstanceID() % 2) == 0;
+            uint32 const frontGate = southFlank ? BG_SA_BLUE_GATE : BG_SA_GREEN_GATE;
+            uint32 const innerGate = southFlank ? BG_SA_RED_GATE : BG_SA_PURPLE_GATE;
             GameObject* targetGate = nullptr;
-            if (!gateDown(BG_SA_GREEN_GATE) || !gateDown(BG_SA_BLUE_GATE))
-                targetGate = nearestIntact(BG_SA_GREEN_GATE, BG_SA_BLUE_GATE);
-            else if (!gateDown(BG_SA_RED_GATE) || !gateDown(BG_SA_PURPLE_GATE))
-                targetGate = nearestIntact(BG_SA_RED_GATE, BG_SA_PURPLE_GATE);
+            if (!gateDown(frontGate))
+                targetGate = bg->GetBGObject(frontGate);
+            else if (!gateDown(innerGate))
+                targetGate = bg->GetBGObject(innerGate);
             else if (!gateDown(BG_SA_YELLOW_GATE))
                 targetGate = bg->GetBGObject(BG_SA_YELLOW_GATE);
             else if (!gateDown(BG_SA_ANCIENT_GATE))
@@ -3307,17 +3593,33 @@ bool BGTactics::selectObjective(bool reset)
 
             if (attacker)
             {
-                // Beach landing: get attackers off the boats and onto the strand first. A
-                // docked-boat rider near the beach (or a bot stranded off-boat up north) heads to
-                // shore; a rider on a boat still at sea is left alone so it isn't pushed overboard.
-                // After the opening wave the core respawns attackers on the beach, so this mainly
-                // covers the initial landing.
+                // Beach landing. Bots can never RIDE the boats: transport boarding is
+                // client-driven (a real client detects deck-standing and reports the transport
+                // GUID in its movement packets), and bots have no client. The core teleports
+                // them to the boat spawn points at round start and the transports sail away
+                // without them, leaving every bot attacker stranded ~1200 yd out at sea — no
+                // navmesh, no path, unreachable by movement. So mirror what the core does with
+                // later attacker waves and put them straight on the beach. A bot somehow on a
+                // docked boat just walks ashore.
                 if (!controlsVehicle)
                 {
                     bool onBoat = bot->GetTransport() != nullptr;
                     float distBeach = bot->GetExactDist2d(SA_BEACH_LANDING.GetPositionX(),
                                                           SA_BEACH_LANDING.GetPositionY());
-                    if ((onBoat && distBeach < 130.0f) || (!onBoat && distBeach > 170.0f))
+                    // Stranded = actually AT SEA, not merely far from the landing. The boats
+                    // spawn at x ~2600-2700 and every walkable inch of the strand lies west of
+                    // x=1620, so an off-boat attacker east of x=1650 can only be a bot the
+                    // ships left behind. (Testing distance-to-beach instead breaks the assault:
+                    // an attacker who ADVANCED inland is also far from the landing and gets
+                    // yo-yo'd back to the beach on every objective reselect.)
+                    if (!onBoat && bot->GetPositionX() > 1650.0f)
+                    {
+                        bot->TeleportTo(bg->GetMapId(), SA_BEACH_LANDING.GetPositionX() + frand(-6.0f, 6.0f),
+                                        SA_BEACH_LANDING.GetPositionY() + frand(-6.0f, 6.0f),
+                                        SA_BEACH_LANDING.GetPositionZ(), SA_BEACH_LANDING.GetOrientation());
+                        return false;
+                    }
+                    if (onBoat && distBeach < 130.0f)
                     {
                         pos.Set(SA_BEACH_LANDING.GetPositionX() + frand(-6.0f, 6.0f),
                                 SA_BEACH_LANDING.GetPositionY() + frand(-6.0f, 6.0f),
@@ -3327,6 +3629,24 @@ bool BGTactics::selectObjective(bool reset)
                     }
                 }
 
+                // All gates down: stop shelling rubble and dismount — the relic can only be
+                // clicked on foot, and a parked demolisher otherwise keeps lobbing boulders at
+                // the wreck of the last gate ("bg siege" stays stale forever).
+                if (controlsVehicle && !targetGate)
+                {
+                    PositionInfo siegePos = context->GetValue<PositionMap&>("position")->Get()["bg siege"];
+                    siegePos.Reset();
+                    posMap["bg siege"] = siegePos;
+                    if (Vehicle* veh = bot->GetVehicle())
+                        if (VehicleSeatEntry const* seat = veh->GetSeatForPassenger(bot))
+                            if (seat->CanEnterOrExit())
+                            {
+                                WorldPacket p;
+                                bot->GetSession()->HandleRequestVehicleExit(p);
+                            }
+                    return false;
+                }
+
                 // Driving a demolisher: roll up to the front gate and aim the boulder at it.
                 if (controlsVehicle && targetGate)
                 {
@@ -3334,7 +3654,10 @@ bool BGTactics::selectObjective(bool reset)
                     siegePos.Set(targetGate->GetPositionX(), targetGate->GetPositionY(),
                                  targetGate->GetPositionZ(), bot->GetMapId());
                     posMap["bg siege"] = siegePos;
-                    pos.Set(targetGate->GetPositionX() + frand(-6.0f, 6.0f),
+                    // Park on the BEACH-SIDE (east, +x) face — the gate object sits ON the wall
+                    // line and gates are invisible to the navmesh, so a random offset landing
+                    // west of the line would drive the demolisher through the closed arch.
+                    pos.Set(targetGate->GetPositionX() + frand(6.0f, 14.0f),
                             targetGate->GetPositionY() + frand(-6.0f, 6.0f), targetGate->GetPositionZ(),
                             bot->GetMapId());
                     posMap["bg objective"] = pos;
@@ -3354,13 +3677,52 @@ bool BGTactics::selectObjective(bool reset)
                 else if (beachBreached && role < 4)
                     BgObjective = bg->GetBGObject(BG_SA_LEFT_FLAG);  // west graveyard
 
+                // Escort the demolishers: infantry's actual job in SA is protecting the tanks
+                // on their way to the gate (cannons and defenders focus them). Non-graveyard
+                // roles glue to the nearest friendly demolisher; when none is in sight they
+                // fall through to staging at the gate, where fresh demolishers get boarded.
+                if (!BgObjective && targetGate && !controlsVehicle && role >= 4)
+                {
+                    GuidVector vehicles = *context->GetValue<GuidVector>("nearest vehicles");
+                    Unit* demolisher = nullptr;
+                    float bestDist = 100000.0f;
+                    for (ObjectGuid const& guid : vehicles)
+                    {
+                        Unit* v = botAI->GetUnit(guid);
+                        if (!v || v->GetEntry() != NPC_DEMOLISHER_SA || !v->IsAlive() || !v->IsFriendlyTo(bot))
+                            continue;
+                        float dist = bot->GetDistance(v);
+                        if (dist < bestDist)
+                        {
+                            bestDist = dist;
+                            demolisher = v;
+                        }
+                    }
+                    if (demolisher)
+                    {
+                        pos.Set(demolisher->GetPositionX() + frand(-8.0f, 8.0f),
+                                demolisher->GetPositionY() + frand(-8.0f, 8.0f), demolisher->GetPositionZ(),
+                                bot->GetMapId());
+                        posMap["bg objective"] = pos;
+                        return true;
+                    }
+                }
+
                 // Otherwise press the assault: stage at the front gate so "enter vehicle" can grab
                 // a demolisher and so on-foot bots escort the tanks / fight at the breach.
                 if (!BgObjective && targetGate)
                 {
-                    pos.Set(targetGate->GetPositionX() + frand(-8.0f, 8.0f),
-                            targetGate->GetPositionY() + frand(-8.0f, 8.0f), targetGate->GetPositionZ(),
-                            bot->GetMapId());
+                    // Stage on the BEACH-SIDE (east, +x) face: SA is a straight east->west
+                    // siege and gates are invisible to the navmesh — an offset landing west of
+                    // the wall line makes bots path through the closed gateway arch. A bot
+                    // already in the staging area HOLDS its spot (IC-style) instead of rolling
+                    // a fresh random point every reselect and milling in circles.
+                    if (bot->GetDistance2d(targetGate->GetPositionX() + 8.0f, targetGate->GetPositionY()) < 20.0f)
+                        pos.Set(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId());
+                    else
+                        pos.Set(targetGate->GetPositionX() + frand(4.0f, 12.0f),
+                                targetGate->GetPositionY() + frand(-8.0f, 8.0f), targetGate->GetPositionZ(),
+                                bot->GetMapId());
                     posMap["bg objective"] = pos;
                     return true;
                 }
@@ -3371,12 +3733,46 @@ bool BGTactics::selectObjective(bool reset)
                 // returned at the passenger guard above and never reach here; their "rocket
                 // blast"/"fire cannon" actions aim the gun at the nearest demolisher/enemy.
 
-                // Hold the foremost threatened gate: man the guns and intercept demolishers.
-                if (targetGate)
+                // Defense line: wall 2 while anything east of it stands (the platoon cannot
+                // legally reach wall 1 — the routes run through the intact purple/red arches;
+                // courtyard graveyard respawns contest the beach ground) — then yellow, then
+                // ancient. While BOTH wall-2 gates stand the platoon SPLITS by bg role instead
+                // of everyone computing the same nearest gate and piling onto it.
+                GameObject* defendGate = nullptr;
+                bool redUp = !gateDown(BG_SA_RED_GATE);
+                bool purpleUp = !gateDown(BG_SA_PURPLE_GATE);
+                if (redUp && purpleUp)
                 {
-                    pos.Set(targetGate->GetPositionX() + frand(-8.0f, 8.0f),
-                            targetGate->GetPositionY() + frand(-8.0f, 8.0f), targetGate->GetPositionZ(),
-                            bot->GetMapId());
+                    // Weight the platoon toward the breached (threatened) flank - "fall back
+                    // fast" is the defensive golden rule; 50/50 only while both walls stand.
+                    uint32 redWeight = 5;
+                    bool greenDown = gateDown(BG_SA_GREEN_GATE);
+                    bool blueDown = gateDown(BG_SA_BLUE_GATE);
+                    if (blueDown && !greenDown)
+                        redWeight = 8;
+                    else if (greenDown && !blueDown)
+                        redWeight = 2;
+                    defendGate = bg->GetBGObject(role < redWeight ? BG_SA_RED_GATE : BG_SA_PURPLE_GATE);
+                }
+                else if (redUp || purpleUp)
+                    defendGate = bg->GetBGObject(redUp ? BG_SA_RED_GATE : BG_SA_PURPLE_GATE);
+                else if (!gateDown(BG_SA_YELLOW_GATE))
+                    defendGate = bg->GetBGObject(BG_SA_YELLOW_GATE);
+                else if (!gateDown(BG_SA_ANCIENT_GATE))
+                    defendGate = bg->GetBGObject(BG_SA_ANCIENT_GATE);
+
+                if (defendGate)
+                {
+                    // Defend from the INSIDE (west, -x) face — mirror of the attacker staging
+                    // rule; a spot east of the wall line would route defenders through the
+                    // arch. A bot already at its post HOLDS position (IC-style) instead of
+                    // rolling a fresh random spot every reselect and milling in circles.
+                    if (bot->GetDistance2d(defendGate->GetPositionX() - 8.0f, defendGate->GetPositionY()) < 20.0f)
+                        pos.Set(bot->GetPositionX(), bot->GetPositionY(), bot->GetPositionZ(), bot->GetMapId());
+                    else
+                        pos.Set(defendGate->GetPositionX() + frand(-12.0f, -4.0f),
+                                defendGate->GetPositionY() + frand(-8.0f, 8.0f), defendGate->GetPositionZ(),
+                                bot->GetMapId());
                     posMap["bg objective"] = pos;
                     return true;
                 }
@@ -3461,11 +3857,12 @@ bool BGTactics::selectObjectiveWp(std::vector<BattleBotPath*> const& vPaths)
     if (!pos.isSet())
         return false;
 
-    // Strand is objective-driven (gates/relic/graveyards) - never waypoint-wander. Returning
-    // false here makes the caller fall through to moveToObjective(true), which heads straight
-    // for the selectObjective target regardless of distance.
-    if (bgType == BATTLEGROUND_SA)
-        return false;
+    // NOTE: Strand deliberately has NO short-circuit here. An earlier revision returned false
+    // for SA ("objective-driven, never waypoint-wander"), relying on the moveToObjective(true)
+    // fall-through — but that issues single 260-1200 yd direct MoveTo calls, which the
+    // pathfinder cannot satisfy (SearchForBestPath returns INVALID_HEIGHT), so no SA bot ever
+    // moved. SA now walks its segmented path network (vPaths_SA) like every other BG and uses
+    // direct movement only inside the 100 yd close-range window.
 
     if (bgType == BATTLEGROUND_WS)
     {
